@@ -1,4 +1,4 @@
-package ch.castellon.grok.billing.ui
+package ch.castellon.grok.usage.ui
 
 import android.Manifest
 import android.app.Activity
@@ -50,23 +50,23 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
-import ch.castellon.grok.billing.BuildConfig
-import ch.castellon.grok.billing.GrokLinks
-import ch.castellon.grok.billing.Phase
-import ch.castellon.grok.billing.PreviewDoor
-import ch.castellon.grok.billing.R
-import ch.castellon.grok.billing.StatusKind
-import ch.castellon.grok.billing.UsageViewModel
-import ch.castellon.grok.billing.showReadingCover
-import ch.castellon.grok.billing.showSessionHome
-import ch.castellon.grok.billing.showSignInActions
-import ch.castellon.grok.billing.showSignInWeb
+import ch.castellon.grok.usage.BuildConfig
+import ch.castellon.grok.usage.GrokLinks
+import ch.castellon.grok.usage.Phase
+import ch.castellon.grok.usage.PreviewDoor
+import ch.castellon.grok.usage.R
+import ch.castellon.grok.usage.StatusKind
+import ch.castellon.grok.usage.UsageViewModel
+import ch.castellon.grok.usage.showReadingCover
+import ch.castellon.grok.usage.showSessionHome
+import ch.castellon.grok.usage.showSignInActions
+import ch.castellon.grok.usage.showSignInWeb
 import kotlinx.coroutines.delay
-import ch.castellon.grok.billing.UsageNotifier
-import ch.castellon.grok.billing.UsageWidgets
-import ch.castellon.grok.billing.bannerLabel
-import ch.castellon.grok.billing.session.DashboardWebView
-import ch.castellon.grok.billing.session.WebCallbacks
+import ch.castellon.grok.usage.UsageNotifier
+import ch.castellon.grok.usage.UsageWidgets
+import ch.castellon.grok.usage.bannerLabel
+import ch.castellon.grok.usage.session.DashboardWebView
+import ch.castellon.grok.usage.session.WebCallbacks
 
 @Composable
 fun AppRoot(vm: UsageViewModel = viewModel()) {

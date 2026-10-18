@@ -1,4 +1,4 @@
-package ch.castellon.grok.billing.ui
+package ch.castellon.grok.usage.ui
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme

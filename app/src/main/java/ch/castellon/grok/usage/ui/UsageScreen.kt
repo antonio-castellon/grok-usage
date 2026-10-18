@@ -1,4 +1,4 @@
-package ch.castellon.grok.billing.ui
+package ch.castellon.grok.usage.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -52,12 +52,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-import ch.castellon.grok.billing.R
-import ch.castellon.grok.billing.StatusKind
-import ch.castellon.grok.billing.UsageSnapshot
-import ch.castellon.grok.billing.barFractions
-import ch.castellon.grok.billing.formatPercent
-import ch.castellon.grok.billing.resetLabel
+import ch.castellon.grok.usage.R
+import ch.castellon.grok.usage.StatusKind
+import ch.castellon.grok.usage.UsageSnapshot
+import ch.castellon.grok.usage.barFractions
+import ch.castellon.grok.usage.formatPercent
+import ch.castellon.grok.usage.resetLabel
 import kotlinx.coroutines.flow.first
 import java.time.Instant
 import java.time.ZoneId

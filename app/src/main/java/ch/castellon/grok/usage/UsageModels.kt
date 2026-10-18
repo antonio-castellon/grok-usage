@@ -1,4 +1,4 @@
-package ch.castellon.grok.billing
+package ch.castellon.grok.usage
 
 data class UsageSegment(
     val label: String,

@@ -1,6 +1,6 @@
 # Privacy
 
-Grok Usage is an unofficial app by Antonio Castellon (Castellon.CH). It is not affiliated with xAI.
+Usage Meter for Grok is an unofficial app by Antonio Castellon (Castellon.CH). It is not affiliated with xAI.
 
 ## What the app does
 
@@ -23,4 +23,4 @@ When the official page loads, your phone talks to xAI (grok.com, accounts.x.ai, 
 
 ## Contact
 
-Use the contact details on the Play Store listing.
+Questions about privacy: antonio@castellon.ch

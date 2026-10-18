@@ -1,4 +1,4 @@
-package ch.castellon.grok.billing.session
+package ch.castellon.grok.usage.session
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -24,14 +24,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
-import ch.castellon.grok.billing.BotMeter
-import ch.castellon.grok.billing.BotRead
-import ch.castellon.grok.billing.BotUsage
-import ch.castellon.grok.billing.GrokLinks
-import ch.castellon.grok.billing.ParsedUsage
-import ch.castellon.grok.billing.UsageParser
-import ch.castellon.grok.billing.decodeJsResult
-import ch.castellon.grok.billing.formatPercent
+import ch.castellon.grok.usage.BotMeter
+import ch.castellon.grok.usage.BotRead
+import ch.castellon.grok.usage.BotUsage
+import ch.castellon.grok.usage.GrokLinks
+import ch.castellon.grok.usage.ParsedUsage
+import ch.castellon.grok.usage.UsageParser
+import ch.castellon.grok.usage.decodeJsResult
+import ch.castellon.grok.usage.formatPercent
 
 class WebCallbacks {
     var onParsed: (ParsedUsage) -> Unit = {}

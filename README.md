@@ -50,12 +50,12 @@ gradlew.bat :app:bundleRelease
 gradlew.bat :app:assembleRelease
 ```
 
-- Play upload: `release\grok-billing-1.0.0.aab`
-- Signed APK: `release\grok-billing-1.0.0.apk`
+- Play upload: `release\grok-usage-1.0.0.aab`
+- Signed APK: `release\grok-usage-1.0.0.apk`
 
-Create the Play app with package name `ch.castellon.grok.billing`. Turn on Play App Signing and upload the AAB. Use this privacy policy URL after the repo is public:
+Create the Play app with package name `ch.castellon.grok.usage`. Turn on Play App Signing and upload the AAB. Use this privacy policy URL after the repo is public:
 
-https://github.com/antonio-castellon/grok-billing/blob/main/PRIVACY.md
+https://github.com/antonio-castellon/grok-usage/blob/main/PRIVACY.md
 
 Data safety: the developer does not collect data. Usage text is stored only on the device. Sign-in loads grok.com inside the app under the user's own login. There is no analytics SDK.
 
@@ -66,7 +66,7 @@ Parser and banner tests live in `app/src/test`. They cover the official wording 
 A debug build can show the sample cards without a session:
 
 ```bat
-adb shell am start -n ch.castellon.grok.billing/.MainActivity --ez preview true
+adb shell am start -n ch.castellon.grok.usage/.MainActivity --ez preview true
 ```
 
 Add `--ez previewScroll true` to open the screen scrolled to the billing links, which shows the banner. Release builds ignore both flags.

@@ -1,12 +1,12 @@
-package ch.castellon.grok.billing
+package ch.castellon.grok.usage
 
-import ch.castellon.grok.billing.session.hostAllowed
-import ch.castellon.grok.billing.session.isGrokHost
-import ch.castellon.grok.billing.session.prefersXaiAccount
-import ch.castellon.grok.billing.session.holdsSignIn
-import ch.castellon.grok.billing.session.isLoginReturnUrl
-import ch.castellon.grok.billing.session.isXaiAccountHome
-import ch.castellon.grok.billing.session.loginHandsOffToDashboard
+import ch.castellon.grok.usage.session.hostAllowed
+import ch.castellon.grok.usage.session.isGrokHost
+import ch.castellon.grok.usage.session.prefersXaiAccount
+import ch.castellon.grok.usage.session.holdsSignIn
+import ch.castellon.grok.usage.session.isLoginReturnUrl
+import ch.castellon.grok.usage.session.isXaiAccountHome
+import ch.castellon.grok.usage.session.loginHandsOffToDashboard
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

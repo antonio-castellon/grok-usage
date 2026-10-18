@@ -1,4 +1,4 @@
-package ch.castellon.grok.billing
+package ch.castellon.grok.usage
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager

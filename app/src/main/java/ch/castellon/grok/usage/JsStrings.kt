@@ -1,4 +1,4 @@
-package ch.castellon.grok.billing
+package ch.castellon.grok.usage
 
 /** evaluateJavascript returns a JSON string. Decode it without an Android JSON library. */
 internal fun decodeJsResult(raw: String?): String {

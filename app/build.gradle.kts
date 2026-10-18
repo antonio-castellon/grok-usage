@@ -13,15 +13,15 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "ch.castellon.grok.billing"
+    namespace = "ch.castellon.grok.usage"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "ch.castellon.grok.billing"
+        applicationId = "ch.castellon.grok.usage"
         minSdk = 28
         targetSdk = 36
-        versionCode = 34
-        versionName = "1.0.33"
+        versionCode = 1
+        versionName = "1.0.0"
     }
 
     signingConfigs {
@@ -72,6 +72,15 @@ tasks.matching { it.name == "bundleRelease" || it.name == "assembleRelease" }.co
     }
 }
 
+val copyReleaseBundle = tasks.register<Copy>("copyReleaseBundle") {
+    from(layout.buildDirectory.file("outputs/bundle/release/app-release.aab"))
+    into(rootProject.layout.projectDirectory.dir("release"))
+    rename { "grok-usage-${android.defaultConfig.versionName}.aab" }
+}
+
+tasks.matching { it.name == "bundleRelease" }.configureEach {
+    finalizedBy(copyReleaseBundle)
+}
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)

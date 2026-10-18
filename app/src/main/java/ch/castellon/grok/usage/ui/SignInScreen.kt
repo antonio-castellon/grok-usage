@@ -1,4 +1,4 @@
-package ch.castellon.grok.billing.ui
+package ch.castellon.grok.usage.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -19,7 +19,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import ch.castellon.grok.billing.R
+import ch.castellon.grok.usage.R
 
 @Composable
 fun SignInScreen(

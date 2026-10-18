@@ -1,4 +1,4 @@
-package ch.castellon.grok.billing.ui
+package ch.castellon.grok.usage.ui
 
 import android.appwidget.AppWidgetManager
 import android.content.ActivityNotFoundException
@@ -9,9 +9,9 @@ import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import android.appwidget.AppWidgetProvider
-import ch.castellon.grok.billing.ClockWidget
-import ch.castellon.grok.billing.R
-import ch.castellon.grok.billing.UsageWidget
+import ch.castellon.grok.usage.ClockWidget
+import ch.castellon.grok.usage.R
+import ch.castellon.grok.usage.UsageWidget
 
 fun openExternal(context: Context, url: String) {
     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))

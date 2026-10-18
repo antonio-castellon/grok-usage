@@ -1,4 +1,4 @@
-package ch.castellon.grok.billing
+package ch.castellon.grok.usage
 
 import android.app.Application
 import android.webkit.CookieManager
@@ -114,8 +114,8 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun notePage(url: String?) {
-        val host = url?.let { ch.castellon.grok.billing.session.hostOf(it) }.orEmpty()
-        val hold = host.isNotEmpty() && ch.castellon.grok.billing.session.holdsSignIn(host)
+        val host = url?.let { ch.castellon.grok.usage.session.hostOf(it) }.orEmpty()
+        val hold = host.isNotEmpty() && ch.castellon.grok.usage.session.holdsSignIn(host)
         if (hold && !providerHold) {
             providerSince = System.currentTimeMillis()
         } else if (!hold && providerHold && providerSince > 0L) {
