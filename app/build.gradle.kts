@@ -6,6 +6,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val appVersion = "1.0.0"
+
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
@@ -13,15 +15,15 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "ch.castellon.grok.billing"
+    namespace = "ch.castellon.grok.usage"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "ch.castellon.grok.billing"
+        applicationId = "ch.castellon.grok.usage"
         minSdk = 28
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = appVersion
     }
 
     signingConfigs {
@@ -70,6 +72,16 @@ tasks.matching { it.name == "bundleRelease" || it.name == "assembleRelease" }.co
             error("keystore.properties is missing. Copy keystore.properties.example and point it at your upload key.")
         }
     }
+}
+
+val copyReleaseBundle by tasks.registering(Copy::class) {
+    from(layout.buildDirectory.file("outputs/bundle/release/app-release.aab"))
+    into(rootProject.layout.projectDirectory.dir("release"))
+    rename { "grok-usage-$appVersion.aab" }
+}
+
+tasks.matching { it.name == "bundleRelease" }.configureEach {
+    finalizedBy(copyReleaseBundle)
 }
 
 dependencies {

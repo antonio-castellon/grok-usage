@@ -1,8 +1,8 @@
-# Grok Usage
+# Usage Meter for Grok
 
-Unofficial English Android app that shows the usage bars from the official Grok dashboard: overall usage, the product breakdown, and the weekly Grok Bot limit.
+Usage Meter for Grok is an unofficial English Android app that shows the usage bars from the official Grok dashboard: overall usage, the product breakdown, and the weekly Grok Bot limit.
 
-It is not affiliated with xAI. It does not run a server and it does not invent a billing API. After you sign in, the app opens the official dashboard and reads the usage text that page already shows. The last numbers stay on the device so the screen still works offline.
+**Unofficial app, not affiliated with xAI.** It does not run a server and it does not invent a billing API. After you sign in, the app opens the official dashboard and reads the usage text that page already shows. The last numbers stay on the device so the screen still works offline.
 
 Grok and xAI are trademarks of their owners.
 
@@ -47,15 +47,13 @@ The upload key stays on this machine. `keystore.properties` and `upload-keystore
 
 ```bat
 gradlew.bat :app:bundleRelease
-gradlew.bat :app:assembleRelease
 ```
 
-- Play upload: `release\grok-billing-1.0.0.aab`
-- Signed APK: `release\grok-billing-1.0.0.apk`
+- Play upload: `release\grok-usage-1.0.0.aab`
 
-Create the Play app with package name `ch.castellon.grok.billing`. Turn on Play App Signing and upload the AAB. Use this privacy policy URL after the repo is public:
+Create the Play app with package name `ch.castellon.grok.usage`. Turn on Play App Signing and upload the AAB. Use this privacy policy URL after the repo is public:
 
-https://github.com/antonio-castellon/grok-billing/blob/main/PRIVACY.md
+https://github.com/antonio-castellon/grok-usage/blob/main/PRIVACY.md
 
 Data safety: the developer does not collect data. Usage text is stored only on the device. The WebView loads grok.com and accounts.x.ai under the user's own login. There is no analytics SDK.
 
@@ -66,7 +64,7 @@ Parser and banner tests live in `app/src/test`. They cover the official wording 
 A debug build can show the sample cards without a session:
 
 ```bat
-adb shell am start -n ch.castellon.grok.billing/.MainActivity --ez preview true
+adb shell am start -n ch.castellon.grok.usage/.MainActivity --ez preview true
 ```
 
 Add `--ez previewScroll true` to open the screen scrolled to the billing links, which shows the banner. Release builds ignore both flags.
