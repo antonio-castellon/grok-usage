@@ -1,6 +1,7 @@
 package ch.castellon.grok.billing
 
 import android.app.Application
+import android.webkit.CookieManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -9,7 +10,36 @@ import androidx.lifecycle.AndroidViewModel
 
 enum class Phase { SignedOut, SigningIn, Ready, Official }
 
-enum class StatusKind { Empty, Updated, Saved, RefreshFailed, NeedUsagePage }
+enum class StatusKind { Empty, Updated, Saved, RefreshFailed, NeedUsagePage, SignInTimedOut }
+
+internal const val SIGN_IN_WAIT_MS = 180_000L
+
+internal fun cookieLooksSignedIn(header: String?): Boolean {
+    if (header.isNullOrBlank()) return false
+    return header.split(';').any { part ->
+        val name = part.substringBefore('=').trim().lowercase()
+        name.isNotEmpty() && name != "__cf_bm" && name != "_cfuvid" && !name.startsWith("__cf")
+    }
+}
+
+internal fun showSignInWeb(phase: Phase, readingUsage: Boolean, sessionKnown: Boolean): Boolean {
+    return phase == Phase.SigningIn && !readingUsage && !sessionKnown
+}
+
+internal fun showReadingCover(phase: Phase, readingUsage: Boolean, sessionKnown: Boolean): Boolean {
+    return phase == Phase.SigningIn && readingUsage && !sessionKnown
+}
+
+internal fun showSessionHome(phase: Phase, sessionKnown: Boolean, hasSnapshot: Boolean): Boolean {
+    return sessionKnown && !hasSnapshot && phase != Phase.Official
+}
+
+internal fun showSignInActions(sessionKnown: Boolean): Boolean = !sessionKnown
+
+internal fun signInWaitExpired(startedAtEpochMs: Long, nowEpochMs: Long, waitMs: Long = SIGN_IN_WAIT_MS): Boolean {
+    if (startedAtEpochMs <= 0L) return false
+    return nowEpochMs - startedAtEpochMs >= waitMs
+}
 
 class UsageViewModel(app: Application) : AndroidViewModel(app) {
     private val store = UsageStore(app)
@@ -31,14 +61,164 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
     var scrollTopTick by mutableIntStateOf(0)
         private set
     var holdPreview by mutableStateOf(false)
+    var readingUsage by mutableStateOf(false)
         private set
+    var sessionKnown by mutableStateOf(false)
+        private set
+    var signInPaused by mutableStateOf(false)
+        private set
+    var providerHold by mutableStateOf(false)
+        private set
+    private var pausedAt = 0L
+    private var leftDuringSignIn = false
+
+    private var providerSince = 0L
+
+    var accountLabel by mutableStateOf(store.loadAccount())
+        private set
+    var notifyEnabled by mutableStateOf(store.loadNotify())
+        private set
+    private var accountPageLeft = false
+    private var pendingBot: BotMeter? = null
+
+    init {
+        val saved = snapshot
+        if (saved != null && saved.segments.isEmpty() && saved.botPercent == null) {
+            store.forgetSnapshot()
+            snapshot = null
+            if (phase == Phase.Ready) phase = Phase.SignedOut
+        }
+        if (hasStoredSession()) resumeSignIn(fromSession = true)
+    }
+
+    fun chooseNotify(enabled: Boolean) {
+        if (notifyEnabled == enabled) return
+        notifyEnabled = enabled
+        store.saveNotify(enabled)
+    }
+
+    fun onAccountName(name: String) {
+        val clean = name.trim()
+        if (!clean.contains('@') || clean.any { it.isWhitespace() }) return
+        if (accountLabel == clean) return
+        accountLabel = clean
+        store.saveAccount(clean)
+    }
+
+    fun leaveAccountPage() {
+        if (accountPageLeft) return
+        if (!webTarget.startsWith("https://accounts.x.ai")) return
+        accountPageLeft = true
+        webTarget = GrokLinks.DASHBOARD
+        loadToken++
+    }
+
+    fun notePage(url: String?) {
+        val host = url?.let { ch.castellon.grok.billing.session.hostOf(it) }.orEmpty()
+        val hold = host.isNotEmpty() && ch.castellon.grok.billing.session.holdsSignIn(host)
+        if (hold && !providerHold) {
+            providerSince = System.currentTimeMillis()
+        } else if (!hold && providerHold && providerSince > 0L) {
+            val started = store.signInStartedAt()
+            if (started > 0L) {
+                store.markSignInStarted(started + (System.currentTimeMillis() - providerSince))
+            }
+            providerSince = 0L
+        }
+        providerHold = hold
+    }
+
+    fun noteLeftDuringSignIn() {
+        if (phase == Phase.SigningIn) leftDuringSignIn = true
+    }
+
+    fun returnedFromProvider(): Boolean {
+        if (phase != Phase.SigningIn || !leftDuringSignIn) return false
+        leftDuringSignIn = false
+        store.markSignInStarted(System.currentTimeMillis())
+        return true
+    }
+
+    fun pauseSignInClock(paused: Boolean) {
+        if (paused) {
+            if (phase != Phase.SigningIn || signInPaused) return
+            pausedAt = System.currentTimeMillis()
+            signInPaused = true
+            return
+        }
+        if (!signInPaused) return
+        val started = store.signInStartedAt()
+        if (started > 0L && pausedAt > 0L) {
+            store.markSignInStarted(started + (System.currentTimeMillis() - pausedAt))
+        }
+        pausedAt = 0L
+        signInPaused = false
+    }
+
+    fun resumeSignIn(fromSession: Boolean) {
+        if (fromSession) sessionKnown = true
+        if (fromSession && accountLabel == null && !accountPageLeft) {
+            webTarget = GrokLinks.ACCOUNT
+            loadToken++
+            if (snapshot != null) {
+                readingUsage = false
+                phase = Phase.Ready
+            } else if (phase != Phase.SigningIn) {
+                holdPreview = false
+                readingUsage = true
+                phase = Phase.SigningIn
+            }
+            return
+        }
+        if (snapshot != null && sessionKnown) {
+            if (refreshing || phase == Phase.SigningIn) return
+            store.clearSignInStarted()
+            readingUsage = false
+            phase = Phase.Ready
+            refresh()
+            return
+        }
+        if (phase == Phase.SigningIn) return
+        holdPreview = false
+        store.markSignInStarted(System.currentTimeMillis())
+        readingUsage = true
+        webTarget = GrokLinks.DASHBOARD
+        phase = Phase.SigningIn
+    }
 
     fun startSignIn() {
         holdPreview = false
+        readingUsage = true
+        store.markSignInStarted(System.currentTimeMillis())
         webTarget = GrokLinks.DASHBOARD
         loadToken++
         refreshing = false
+        status = StatusKind.Empty
         phase = Phase.SigningIn
+    }
+
+    fun hasUnfinishedSignIn(): Boolean = store.signInStartedAt() > 0L
+
+    fun hasStoredSession(): Boolean {
+        val jar = runCatching { CookieManager.getInstance() }.getOrNull() ?: return false
+        return sessionCookieUrls.any { url ->
+            cookieLooksSignedIn(runCatching { jar.getCookie(url) }.getOrNull())
+        }
+    }
+
+    fun signInRemainingMs(nowEpochMs: Long = System.currentTimeMillis()): Long {
+        val started = store.signInStartedAt()
+        if (started <= 0L) return SIGN_IN_WAIT_MS
+        return (SIGN_IN_WAIT_MS - (nowEpochMs - started)).coerceAtLeast(0L)
+    }
+
+    fun abandonStuckSignIn() {
+        store.clearSignInStarted()
+        refreshing = false
+        webTarget = GrokLinks.DASHBOARD
+        loadToken++
+        status = StatusKind.SignInTimedOut
+        phase = if (snapshot == null) Phase.SignedOut else Phase.Ready
     }
 
     fun openOfficial(url: String) {
@@ -50,40 +230,112 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun closeWeb() {
+        store.clearSignInStarted()
+        readingUsage = false
         refreshing = false
         phase = if (snapshot == null) Phase.SignedOut else Phase.Ready
     }
 
+    fun onAccountShell() {
+        if (phase != Phase.SigningIn) return
+        readingUsage = true
+    }
+
+    fun onSessionConfirmed() {
+        sessionKnown = true
+        if (phase == Phase.SigningIn) readingUsage = true
+    }
+
+    fun onNeedLogin() {
+        if (phase != Phase.SigningIn || sessionKnown) return
+        readingUsage = false
+    }
+
+    fun onUsageUnread() {
+        if (phase == Phase.Official || holdPreview) return
+        readingUsage = false
+        refreshing = false
+        store.clearSignInStarted()
+        if (snapshot != null) {
+            status = StatusKind.RefreshFailed
+            phase = Phase.Ready
+            return
+        }
+        if (!sessionKnown) return
+        android.util.Log.i("GrokUsage", "unread no-snapshot")
+        status = StatusKind.NeedUsagePage
+        phase = Phase.Ready
+    }
+
     fun refresh() {
         holdPreview = false
-        if (snapshot == null && phase == Phase.SignedOut) {
+        if (snapshot == null && !sessionKnown) {
             startSignIn()
             return
         }
         webTarget = GrokLinks.DASHBOARD
-        refreshing = true
         loadToken++
+        if (snapshot == null) {
+            readingUsage = true
+            refreshing = false
+            phase = Phase.SigningIn
+        } else {
+            refreshing = true
+        }
+    }
+
+    fun onBotMeter(meter: BotMeter) {
+        if (holdPreview) return
+        pendingBot = meter
+        val current = snapshot ?: return
+        if (current.botPercent != null) return
+        val updated = current.copy(
+            botPercent = meter.percent,
+            botResetRaw = meter.resetRaw,
+            updatedAtEpochMs = System.currentTimeMillis(),
+        )
+        snapshot = updated
+        store.save(updated)
+        status = StatusKind.Updated
     }
 
     fun onParsed(parsed: ParsedUsage) {
         if (holdPreview) return
-        snapshot = UsageSnapshot.from(parsed, System.currentTimeMillis())
-        store.save(snapshot!!)
+        var snap = UsageSnapshot.from(parsed, System.currentTimeMillis())
+        if (snap.botPercent == null) {
+            pendingBot?.let { bot ->
+                snap = snap.copy(botPercent = bot.percent, botResetRaw = bot.resetRaw)
+            }
+        } else {
+            pendingBot = null
+        }
+        snapshot = snap
+        store.save(snap)
+        store.clearSignInStarted()
+        sessionKnown = true
+        readingUsage = false
         refreshing = false
         status = StatusKind.Updated
-        if (phase == Phase.SigningIn) phase = Phase.Ready
+        if (phase == Phase.SigningIn || phase == Phase.SignedOut) phase = Phase.Ready
     }
 
     fun onGiveUp() {
         if (holdPreview || phase == Phase.SignedOut) return
-        refreshing = false
         if (phase == Phase.Official) return
+        if (phase == Phase.SigningIn && sessionKnown) return
+        refreshing = false
         status = if (snapshot != null) StatusKind.RefreshFailed else StatusKind.NeedUsagePage
     }
 
     fun signOut() {
         holdPreview = false
+        readingUsage = false
+        sessionKnown = false
+        accountLabel = null
+        accountPageLeft = false
+        pendingBot = null
         snapshot = null
+        store.clearSignInStarted()
         store.clear()
         refreshing = false
         status = StatusKind.Empty
@@ -106,5 +358,14 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
 
     fun requestScrollTop() {
         scrollTopTick++
+    }
+
+    private companion object {
+        val sessionCookieUrls = arrayOf(
+            "https://grok.com",
+            "https://grok.com/dashboard",
+            "https://accounts.x.ai",
+            "https://accounts.spacex.ai",
+        )
     }
 }

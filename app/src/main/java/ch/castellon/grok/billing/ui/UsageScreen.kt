@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -49,8 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import ch.castellon.grok.billing.BuildConfig
-import ch.castellon.grok.billing.GrokLinks
+
 import ch.castellon.grok.billing.R
 import ch.castellon.grok.billing.StatusKind
 import ch.castellon.grok.billing.UsageSnapshot
@@ -73,12 +74,18 @@ fun UsageScreen(
     status: StatusKind,
     scrollTick: Int,
     scrollTopTick: Int,
+    accountLabel: String?,
     onRefresh: () -> Unit,
     onCardsVisible: (Boolean) -> Unit,
-    onOpen: (String) -> Unit,
+    onOpenGrok: () -> Unit,
     onSignInAgain: () -> Unit,
+    allowSignInAgain: Boolean,
     onSignOut: () -> Unit,
     onPrivacy: () -> Unit,
+    notifyEnabled: Boolean,
+    onNotifyChange: (Boolean) -> Unit,
+    onAddWidget: () -> Unit,
+    onAddClockWidget: () -> Unit,
 ) {
     val scroll = rememberScrollState()
     var viewportTop by remember { mutableFloatStateOf(0f) }
@@ -122,6 +129,13 @@ fun UsageScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            if (!accountLabel.isNullOrBlank()) {
+                Text(
+                    text = stringResource(R.string.signed_in_as, accountLabel),
+                    color = Muted,
+                    fontSize = 14.sp,
+                )
+            }
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.onGloballyPositioned { coords ->
@@ -137,15 +151,23 @@ fun UsageScreen(
                     onCardsVisible(visible >= span * 0.55f)
                 },
             ) {
-                if (status == StatusKind.RefreshFailed) {
+                if (status == StatusKind.RefreshFailed || status == StatusKind.SignInTimedOut) {
                     Text(
-                        text = stringResource(R.string.status_refresh_failed),
+                        text = stringResource(
+                            if (status == StatusKind.SignInTimedOut) {
+                                R.string.status_sign_in_timeout
+                            } else {
+                                R.string.status_refresh_failed
+                            },
+                        ),
                         color = Warning,
                         fontSize = 14.sp,
                         lineHeight = 20.sp,
                     )
-                    TextButton(onClick = onSignInAgain) {
-                        Text(stringResource(R.string.sign_in_again))
+                    if (allowSignInAgain) {
+                        TextButton(onClick = onSignInAgain) {
+                            Text(stringResource(R.string.sign_in_again))
+                        }
                     }
                 }
                 if (snapshot.overallPercent != null) {
@@ -194,29 +216,16 @@ fun UsageScreen(
                 )
             }
 
-            Text(
-                text = stringResource(R.string.billing),
-                color = Ink,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            LinkButton(stringResource(R.string.view_official)) { onOpen(GrokLinks.DASHBOARD) }
-            LinkButton(stringResource(R.string.billing_invoices)) { onOpen(GrokLinks.BILLING) }
-            LinkButton(stringResource(R.string.legacy_billing)) { onOpen(GrokLinks.LEGACY_BILLING) }
+            NotifyRow(enabled = notifyEnabled, onChange = onNotifyChange)
+            LinkButton(stringResource(R.string.widget_add), onClick = onAddWidget)
+            LinkButton(stringResource(R.string.widget_add_clock), onClick = onAddClockWidget)
+            LinkButton(stringResource(R.string.open_grok_usage), onClick = onOpenGrok)
             TextButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.sign_out))
             }
             TextButton(onClick = onPrivacy, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.privacy))
             }
-            Text(
-                text = stringResource(R.string.version, BuildConfig.VERSION_NAME),
-                color = Muted,
-                fontSize = 12.sp,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center,
-            )
             Text(
                 text = stringResource(R.string.not_affiliated),
                 color = Muted,
@@ -227,6 +236,44 @@ fun UsageScreen(
                 textAlign = TextAlign.Center,
             )
         }
+    }
+}
+
+@Composable
+private fun NotifyRow(enabled: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(CardBg)
+            .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.notify_title),
+                color = Ink,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                text = stringResource(R.string.notify_body),
+                color = Muted,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+            )
+        }
+        Switch(
+            checked = enabled,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Ink,
+                checkedTrackColor = BotBlue,
+                uncheckedThumbColor = Ink,
+                uncheckedTrackColor = Line,
+                uncheckedBorderColor = Line,
+            ),
+        )
     }
 }
 

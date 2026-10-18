@@ -17,7 +17,33 @@ class UsageStore(context: Context) {
     }
 
     fun clear() {
+        prefs.edit().remove(KEY).remove(STARTED).remove(ACCOUNT).apply()
+    }
+
+    fun forgetSnapshot() {
         prefs.edit().remove(KEY).apply()
+    }
+
+    fun loadAccount(): String? = prefs.getString(ACCOUNT, null)?.takeIf { it.isNotBlank() }
+
+    fun saveAccount(name: String) {
+        prefs.edit().putString(ACCOUNT, name).apply()
+    }
+
+    fun signInStartedAt(): Long = prefs.getLong(STARTED, 0L)
+
+    fun markSignInStarted(nowEpochMs: Long) {
+        prefs.edit().putLong(STARTED, nowEpochMs).apply()
+    }
+
+    fun clearSignInStarted() {
+        prefs.edit().remove(STARTED).apply()
+    }
+
+    fun loadNotify(): Boolean = prefs.getBoolean(NOTIFY, false)
+
+    fun saveNotify(enabled: Boolean) {
+        prefs.edit().putBoolean(NOTIFY, enabled).apply()
     }
 
     private fun encode(snapshot: UsageSnapshot): String {
@@ -71,5 +97,8 @@ class UsageStore(context: Context) {
     private companion object {
         const val PREFS = "usage"
         const val KEY = "snapshot"
+        const val STARTED = "signInStartedAt"
+        const val ACCOUNT = "accountLabel"
+        const val NOTIFY = "notifyEnabled"
     }
 }

@@ -1,7 +1,16 @@
 package ch.castellon.grok.billing
 
+import ch.castellon.grok.billing.session.hostAllowed
+import ch.castellon.grok.billing.session.isGrokHost
+import ch.castellon.grok.billing.session.prefersXaiAccount
+import ch.castellon.grok.billing.session.holdsSignIn
+import ch.castellon.grok.billing.session.isLoginReturnUrl
+import ch.castellon.grok.billing.session.isXaiAccountHome
+import ch.castellon.grok.billing.session.loginHandsOffToDashboard
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class UsageLogicTest {
@@ -28,6 +37,15 @@ class UsageLogicTest {
         assertEquals(65f, parsed.botPercent!!, 0.01f)
         assertEquals("Oct 19, 2026, 3:00 AM", parsed.botResetRaw)
         assertEquals("Usage 13% · Bot 65%", bannerLabel(parsed.overallPercent, parsed.botPercent))
+        assertEquals("13", statusIconText(parsed.overallPercent))
+        assertEquals("65", statusIconText(parsed.botPercent))
+        assertEquals("65%", statusBarFigure(parsed.botPercent, parsed.overallPercent))
+        assertEquals("13%", statusBarFigure(null, parsed.overallPercent))
+        assertEquals(listOf("65%"), statusIconGlyphs(parsed.botPercent))
+        assertEquals(listOf("66", ".5%"), statusIconGlyphs(66.5f))
+        assertEquals(listOf("Bot 65%", "Usage 13%"), notificationLines(parsed.overallPercent, parsed.botPercent))
+        assertEquals("Bot 66.9%" to "Usage 17%", widgetClockLines(17f, 66.9f))
+        assertEquals("Bot —" to "Usage —", widgetClockLines(null, null))
         assertEquals("Resets Oct 20, 2026, 10:48 PM", resetLabel(parsed.overallResetRaw))
     }
 
@@ -119,5 +137,121 @@ class UsageLogicTest {
         assertEquals("13% used\nChat 4%", decodeJsResult("\"13% used\\nChat 4%\""))
         assertEquals("Say \"hi\"", decodeJsResult("\"Say \\\"hi\\\"\""))
         assertEquals("", decodeJsResult("null"))
+    }
+
+    @Test
+    fun spacexLinkHostStaysInTheAppUntilUsage() {
+        assertTrue(hostAllowed("api.workos.com"))
+        assertTrue(holdsSignIn("api.workos.com"))
+        assertFalse(loginHandsOffToDashboard("https://api.workos.com/user_management/authorize"))
+        assertTrue(hostAllowed("accounts.spacex.ai"))
+        assertTrue(hostAllowed("accounts.x.ai"))
+        assertTrue(holdsSignIn("accounts.spacex.ai"))
+        assertFalse(loginHandsOffToDashboard("https://accounts.spacex.ai/sign-in"))
+        assertFalse(loginHandsOffToDashboard("https://x.com/i/flow/login"))
+        assertTrue(loginHandsOffToDashboard("https://accounts.spacex.ai/oauth/callback?code=ok"))
+        assertTrue(loginHandsOffToDashboard("https://x.com/home"))
+        assertFalse(loginHandsOffToDashboard("https://grok.com/dashboard"))
+        assertFalse(loginHandsOffToDashboard("https://grok.com/"))
+        assertTrue(isLoginReturnUrl("https://grok.com/dashboard"))
+        assertFalse(isLoginReturnUrl("https://accounts.spacex.ai/sign-in"))
+        assertTrue(prefersXaiAccount("https://authenticator.cursor.sh/"))
+        assertTrue(prefersXaiAccount("https://cursor.com/dashboard?from=grok"))
+        assertFalse(prefersXaiAccount("https://accounts.x.ai/sign-in?redirect=grok"))
+        assertTrue(isXaiAccountHome("https://accounts.x.ai/account"))
+        assertFalse(isXaiAccountHome("https://accounts.x.ai/sign-in?redirect=grok"))
+    }
+
+    @Test
+    fun superGrokHeavyPanel() {
+        val parsed = UsageParser.parse(
+            """
+            Usage
+            Weekly SuperGrok Heavy Limit
+            15% used
+            Resets October 20, 2026 at 8:58 AM
+            Grok Build 11%
+            Chat 4%
+            Weekly Grok Bot Limit
+            66% used
+            Resets October 18, 2026 at 9:13 PM
+            """.trimIndent(),
+        )
+        requireNotNull(parsed)
+        assertEquals(15f, parsed.overallPercent!!, 0.01f)
+        assertEquals(
+            listOf(UsageSegment("Grok Build", 11f), UsageSegment("Chat", 4f)),
+            parsed.segments,
+        )
+        assertEquals(66f, parsed.botPercent!!, 0.01f)
+    }
+
+    @Test
+    fun cursorUpgradePercentIsNotGrokUsage() {
+        assertNull(
+            UsageParser.parse(
+                """
+                Usage
+                0% used
+                Resets Nov 18, 2026
+                Upgrade
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun sessionCookieIgnoresCloudflareOnly() {
+        assertFalse(cookieLooksSignedIn(null))
+        assertFalse(cookieLooksSignedIn("__cf_bm=abc; _cfuvid=xyz"))
+        assertTrue(cookieLooksSignedIn("__cf_bm=abc; sso=1"))
+    }
+
+    @Test
+    fun storedSessionOpensUsageInsteadOfSignIn() {
+        assertFalse(showSignInWeb(Phase.SigningIn, readingUsage = true, sessionKnown = true))
+        assertFalse(showSignInWeb(Phase.SigningIn, readingUsage = false, sessionKnown = true))
+        assertFalse(showSignInWeb(Phase.SigningIn, readingUsage = true, sessionKnown = false))
+        assertTrue(showSignInWeb(Phase.SigningIn, readingUsage = false, sessionKnown = false))
+        assertTrue(showSessionHome(Phase.SigningIn, sessionKnown = true, hasSnapshot = false))
+        assertTrue(showSessionHome(Phase.Ready, sessionKnown = true, hasSnapshot = false))
+        assertFalse(showSessionHome(Phase.Ready, sessionKnown = true, hasSnapshot = true))
+        assertFalse(showSessionHome(Phase.SignedOut, sessionKnown = false, hasSnapshot = false))
+        assertFalse(showSignInActions(sessionKnown = true))
+        assertTrue(showSignInActions(sessionKnown = false))
+        assertTrue(showReadingCover(Phase.SigningIn, readingUsage = true, sessionKnown = false))
+        assertFalse(showReadingCover(Phase.SigningIn, readingUsage = true, sessionKnown = true))
+    }
+
+    @Test
+    fun signInWaitExpiresAfterThreeMinutes() {
+        assertFalse(signInWaitExpired(0L, 180_000L))
+        assertFalse(signInWaitExpired(1_000L, 180_999L))
+        assertTrue(signInWaitExpired(1_000L, 181_000L))
+    }
+
+    @Test
+    fun botMeterFromUsageSocket() {
+        val ms = java.time.Instant.parse("2026-10-18T21:13:00Z").toEpochMilli()
+        val read = BotUsage.parse(
+            """{"gen":2,"ok":true,"percent":66,"resetMs":$ms}""",
+            java.time.ZoneOffset.UTC,
+        )
+        val meter = (read as BotRead.Meter).meter
+        assertEquals(66f, meter.percent, 0.01f)
+        assertEquals("October 18, 2026 at 9:13 PM", meter.resetRaw)
+        assertEquals(2, BotUsage.generation("""{"gen":2,"ok":true}"""))
+        assertTrue(BotUsage.parse("""{"ok":true,"none":true}""") is BotRead.None)
+        assertTrue(BotUsage.parse("""{"ok":false,"err":"timeout"}""") is BotRead.Failed)
+        assertTrue(BotUsage.parse("""{"ok":true,"percent":140,"resetMs":0}""") is BotRead.Failed)
+        val seconds = BotUsage.parse(
+            """{"ok":true,"percent":0,"resetMs":${ms / 1000}}""",
+            java.time.ZoneOffset.UTC,
+        ) as BotRead.Meter
+        assertEquals("October 18, 2026 at 9:13 PM", seconds.meter.resetRaw)
+        assertTrue(isGrokHost("grok.com"))
+        assertTrue(isGrokHost("assets.grok.com"))
+        assertFalse(isGrokHost("grokusercontent.com"))
+        assertFalse(isGrokHost("cursor.com"))
     }
 }

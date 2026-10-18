@@ -35,7 +35,9 @@ object UsageParser {
         val confident = used.containsMatchIn(text) ||
             header != null ||
             (segments.size >= 2 && usageWord.containsMatchIn(text))
-        if (!confident || (overall == null && bot == null)) return null
+        val grokPage = Regex("(?i)supergrok|grok\\s+build|weekly\\s+grok\\s+bot|grok\\s+bot\\s+limit")
+            .containsMatchIn(text)
+        if (!confident || !grokPage || (overall == null && bot == null)) return null
         return ParsedUsage(
             overallPercent = overall,
             overallResetRaw = resetRaw(overallLines),

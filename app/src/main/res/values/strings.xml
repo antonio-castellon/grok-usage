@@ -3,7 +3,7 @@
     <string name="app_name">Grok Usage</string>
     <string name="kicker">GROK USAGE</string>
     <string name="hero_title">Your Grok usage</string>
-    <string name="hero_body">Sign in with your Grok account. This app reads the usage page on the official dashboard and saves the last numbers on this device.</string>
+    <string name="hero_body">Sign in stays in this app. When the official Usage section appears, the bars fill in. Open official Usage leaves the app and opens the dashboard in your browser.</string>
     <string name="sign_in">Sign in with Grok</string>
     <string name="open_official">Open official Usage</string>
     <string name="usage">Usage</string>
@@ -13,6 +13,8 @@
     <string name="last_updated">Last updated %1$s</string>
     <string name="billing">Billing</string>
     <string name="view_official">View official Usage</string>
+    <string name="open_grok_usage">Open Usage in Grok</string>
+    <string name="signed_in_as">Signed in as %1$s</string>
     <string name="billing_invoices">Billing and invoices</string>
     <string name="legacy_billing">Legacy billing</string>
     <string name="sign_out">Sign out</string>
@@ -22,11 +24,27 @@
     <string name="done">Done</string>
     <string name="official_page">Official page</string>
     <string name="not_affiliated">Unofficial app. Not affiliated with xAI.</string>
+    <string name="version_label">Version %1$s</string>
+    <string name="reading_usage">Reading your usage</string>
+    <string name="signed_in_unread">Signed in. The official usage page did not return numbers yet.</string>
+    <string name="refresh">Refresh</string>
     <string name="status_refresh_failed">Could not refresh. Showing the last saved usage.</string>
     <string name="status_need_page">Open Usage on the page below. The bars fill in from that page.</string>
+    <string name="status_sign_in_timeout">Sign-in waited too long, so that check was cancelled.</string>
     <string name="sign_in_again">Sign in again</string>
-    <string name="version">Version %1$s</string>
+    <string name="notify_title">Show in notifications</string>
+    <string name="notify_body">Shows the bot percent on the status bar. Both numbers stay in the notification.</string>
+    <string name="widget_name">Grok usage</string>
+    <string name="widget_description">Bot and usage percents. Two cells wide so a decimal fits.</string>
+    <string name="widget_add">Add 2×1 widget</string>
+    <string name="widget_clock_name">Grok clock</string>
+    <string name="widget_clock_description">Large time, the date under it, and both percents on the left.</string>
+    <string name="widget_add_clock">Add 4×2 clock widget</string>
+    <string name="widget_pin_unavailable">Long-press the home screen, then choose Widgets.</string>
+    <string name="notify_bot">Bot</string>
+    <string name="notify_channel">Usage</string>
+    <string name="notify_channel_body">Latest usage and bot percentages.</string>
     <string name="cd_banner">Usage summary. Tap to show the full cards.</string>
     <string name="cd_usage_bar">%1$s percent used</string>
-    <string name="privacy_body">Grok Usage is an unofficial app and is not affiliated with xAI. It does not run a server and it does not see your password. Sign-in opens the official xAI page inside this app. The app reads the usage text that page already shows and saves those numbers on this phone so you can view them offline. Sign out deletes the saved numbers and the in-app sign-in cookies. Billing pages open on grok.com under your own account.</string>
+    <string name="privacy_body">Grok Usage is an unofficial app and is not affiliated with xAI. It does not run a server and it does not see your password. Sign-in opens the official page inside this app. If that page waits too long, the check is cancelled and those cookies are deleted. Saved usage numbers stay on this phone until you sign out.</string>
 </resources>
