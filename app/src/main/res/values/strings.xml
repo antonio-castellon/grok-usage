@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Grok Usage</string>
+    <string name="kicker">GROK USAGE</string>
+    <string name="hero_title">Your Grok usage</string>
+    <string name="hero_body">Sign in with your Grok account. This app reads the usage page on the official dashboard and saves the last numbers on this device.</string>
+    <string name="sign_in">Sign in with Grok</string>
+    <string name="open_official">Open official Usage</string>
+    <string name="usage">Usage</string>
+    <string name="used">used</string>
+    <string name="bot_title">Weekly Grok Bot Limit</string>
+    <string name="data_note">Data from the official Grok dashboard. Pull down to refresh.</string>
+    <string name="last_updated">Last updated %1$s</string>
+    <string name="billing">Billing</string>
+    <string name="view_official">View official Usage</string>
+    <string name="billing_invoices">Billing and invoices</string>
+    <string name="legacy_billing">Legacy billing</string>
+    <string name="sign_out">Sign out</string>
+    <string name="privacy">Privacy</string>
+    <string name="close">Close</string>
+    <string name="back">Back</string>
+    <string name="done">Done</string>
+    <string name="official_page">Official page</string>
+    <string name="not_affiliated">Unofficial app. Not affiliated with xAI.</string>
+    <string name="status_refresh_failed">Could not refresh. Showing the last saved usage.</string>
+    <string name="status_need_page">Open Usage on the page below. The bars fill in from that page.</string>
+    <string name="sign_in_again">Sign in again</string>
+    <string name="version">Version %1$s</string>
+    <string name="cd_banner">Usage summary. Tap to show the full cards.</string>
+    <string name="cd_usage_bar">%1$s percent used</string>
+    <string name="privacy_body">Grok Usage is an unofficial app and is not affiliated with xAI. It does not run a server and it does not see your password. Sign-in opens the official xAI page inside this app. The app reads the usage text that page already shows and saves those numbers on this phone so you can view them offline. Sign out deletes the saved numbers and the in-app sign-in cookies. Billing pages open on grok.com under your own account.</string>
+</resources>
