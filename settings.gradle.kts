@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "grok-billing"
+rootProject.name = "grok-usage"
 include(":app")

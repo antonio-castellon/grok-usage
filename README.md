@@ -37,7 +37,7 @@ gradlew.bat :app:assembleDebug
 
 Install the debug APK from `app\build\outputs\apk\debug\app-debug.apk`.
 
-On first open, tap **Sign in with Grok**. The official page loads inside the app. When the Usage section is on screen, the bars fill in. **Open official Usage** on the signed-out screen opens the dashboard in the browser, which is a separate sign-in from the one inside the app.
+On first open, tap **Sign in with Grok**. The official page opens in the app. When the Usage section is on that page, the bars fill in. **Open official Usage** is the separate action: it leaves the app and opens `https://grok.com/dashboard` in the browser. Google, X, and SpaceX account pages stay inside the app and do not cancel the sign-in. When a code or an account link finishes, the app opens Usage. The three-minute cancel applies only while the page is idle on the app's own sign-in screen.
 
 Pull down on the cards to read the page again. **Sign out** deletes the saved numbers and the in-app cookies.
 
@@ -50,14 +50,14 @@ gradlew.bat :app:bundleRelease
 gradlew.bat :app:assembleRelease
 ```
 
-- Play upload: `release\grok-billing-1.0.0.aab`
-- Signed APK: `release\grok-billing-1.0.0.apk`
+- Play upload: `release\grok-usage-1.0.0.aab`
+- Signed APK: `release\grok-usage-1.0.0.apk`
 
-Create the Play app with package name `ch.castellon.grok.billing`. Turn on Play App Signing and upload the AAB. Use this privacy policy URL after the repo is public:
+Create the Play app with package name `ch.castellon.grok.usage`. Turn on Play App Signing and upload the AAB. Use this privacy policy URL after the repo is public:
 
-https://github.com/antonio-castellon/grok-billing/blob/main/PRIVACY.md
+https://github.com/antonio-castellon/grok-usage/blob/main/PRIVACY.md
 
-Data safety: the developer does not collect data. Usage text is stored only on the device. The WebView loads grok.com and accounts.x.ai under the user's own login. There is no analytics SDK.
+Data safety: the developer does not collect data. Usage text is stored only on the device. Sign-in loads grok.com inside the app under the user's own login. There is no analytics SDK.
 
 ## Tests
 
@@ -66,7 +66,7 @@ Parser and banner tests live in `app/src/test`. They cover the official wording 
 A debug build can show the sample cards without a session:
 
 ```bat
-adb shell am start -n ch.castellon.grok.billing/.MainActivity --ez preview true
+adb shell am start -n ch.castellon.grok.usage/.MainActivity --ez preview true
 ```
 
 Add `--ez previewScroll true` to open the screen scrolled to the billing links, which shows the banner. Release builds ignore both flags.

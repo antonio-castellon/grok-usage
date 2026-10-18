@@ -1,4 +1,4 @@
-package ch.castellon.grok.billing
+package ch.castellon.grok.usage
 
 import java.util.Locale
 import kotlin.math.abs
@@ -19,6 +19,36 @@ fun bannerLabel(overall: Float?, bot: Float?): String? = when {
     overall != null -> "Usage ${formatPercent(overall)}%"
     bot != null -> "Bot ${formatPercent(bot)}%"
     else -> null
+}
+
+fun statusIconText(percent: Float?): String? = percent?.let { formatPercent(it) }
+
+/** Status-bar glyph: the bot percent only, with a percent sign. */
+fun statusBarFigure(bot: Float?, overall: Float? = null): String? =
+    statusIconText(bot ?: overall)?.let { "$it%" }
+
+/**
+ * Big digits on top, the decimal and percent sign tucked underneath,
+ * so the bot number fills the status-bar slot.
+ */
+fun statusIconGlyphs(percent: Float?): List<String> {
+    val text = statusIconText(percent) ?: return emptyList()
+    val dot = text.indexOf('.')
+    if (dot < 0) return listOf("$text%")
+    return listOf(text.substring(0, dot), text.substring(dot) + "%")
+}
+
+/** Both figures for the notification shade. Bot first. */
+fun notificationLines(overall: Float?, bot: Float?): List<String> = listOfNotNull(
+    statusIconText(bot)?.let { "Bot $it%" },
+    statusIconText(overall)?.let { "Usage $it%" },
+)
+
+/** Clock widget: one line per figure, always both lines. */
+fun widgetClockLines(overall: Float?, bot: Float?): Pair<String, String> {
+    val botText = statusIconText(bot)?.let { "$it%" } ?: "—"
+    val usageText = statusIconText(overall)?.let { "$it%" } ?: "—"
+    return "Bot $botText" to "Usage $usageText"
 }
 
 fun resetLabel(raw: String?): String? {

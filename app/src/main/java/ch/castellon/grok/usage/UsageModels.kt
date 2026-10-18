@@ -1,4 +1,4 @@
-package ch.castellon.grok.billing
+package ch.castellon.grok.usage
 
 data class UsageSegment(
     val label: String,
@@ -35,6 +35,8 @@ data class UsageSnapshot(
 
 object GrokLinks {
     const val DASHBOARD = "https://grok.com/dashboard"
+    const val SIGN_IN = "https://accounts.x.ai/sign-in?redirect=grok"
+    const val ACCOUNT = "https://accounts.x.ai/account"
     const val BILLING = "https://grok.com/dashboard/billing"
     const val LEGACY_BILLING = "https://grok.com/?_s=billing"
 }
