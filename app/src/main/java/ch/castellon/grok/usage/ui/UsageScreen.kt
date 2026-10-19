@@ -75,6 +75,8 @@ fun UsageScreen(
     scrollTick: Int,
     scrollTopTick: Int,
     accountLabel: String?,
+    demo: Boolean,
+    onExitDemo: () -> Unit,
     onRefresh: () -> Unit,
     onCardsVisible: (Boolean) -> Unit,
     onOpenGrok: () -> Unit,
@@ -129,7 +131,9 @@ fun UsageScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (!accountLabel.isNullOrBlank()) {
+            if (demo) {
+                DemoHeader(onExitDemo)
+            } else if (!accountLabel.isNullOrBlank()) {
                 Text(
                     text = stringResource(R.string.signed_in_as, accountLabel),
                     color = Muted,
@@ -207,7 +211,7 @@ fun UsageScreen(
                     textAlign = TextAlign.Center,
                 )
                 Text(
-                    text = stringResource(R.string.data_note),
+                    text = stringResource(if (demo) R.string.demo_body else R.string.data_note),
                     color = Muted,
                     fontSize = 12.sp,
                     lineHeight = 16.sp,
@@ -216,12 +220,16 @@ fun UsageScreen(
                 )
             }
 
-            NotifyRow(enabled = notifyEnabled, onChange = onNotifyChange)
-            LinkButton(stringResource(R.string.widget_add), onClick = onAddWidget)
-            LinkButton(stringResource(R.string.widget_add_clock), onClick = onAddClockWidget)
-            LinkButton(stringResource(R.string.open_grok_usage), onClick = onOpenGrok)
-            TextButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.sign_out))
+            if (demo) {
+                LinkButton(stringResource(R.string.demo_exit), onClick = onExitDemo)
+            } else {
+                NotifyRow(enabled = notifyEnabled, onChange = onNotifyChange)
+                LinkButton(stringResource(R.string.widget_add), onClick = onAddWidget)
+                LinkButton(stringResource(R.string.widget_add_clock), onClick = onAddClockWidget)
+                LinkButton(stringResource(R.string.open_grok_usage), onClick = onOpenGrok)
+                TextButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.sign_out))
+                }
             }
             TextButton(onClick = onPrivacy, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.privacy))
@@ -235,6 +243,30 @@ fun UsageScreen(
                     .padding(bottom = 12.dp),
                 textAlign = TextAlign.Center,
             )
+        }
+    }
+}
+
+@Composable
+private fun DemoHeader(onExit: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(CardBg)
+            .border(1.dp, Warning, RoundedCornerShape(16.dp))
+            .padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.demo_label),
+            color = Warning,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onExit) {
+            Text(stringResource(R.string.demo_exit))
         }
     }
 }

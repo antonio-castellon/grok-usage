@@ -15,6 +15,24 @@ import org.junit.Test
 
 class UsageLogicTest {
     @Test
+    fun demoNeverShowsDashboardWeb() {
+        Phase.entries.forEach { phase -> assertFalse(showDashboardWeb(phase, demo = true)) }
+        assertFalse(showDashboardWeb(Phase.SignedOut, demo = false))
+        assertTrue(showDashboardWeb(Phase.Ready, demo = false))
+        assertTrue(showDashboardWeb(Phase.SigningIn, demo = false))
+    }
+
+    @Test
+    fun demoDataIsRoundSample() {
+        val demo = DemoData.snapshot
+        assertEquals(42f, demo.overallPercent!!, 0f)
+        assertEquals(60f, demo.botPercent!!, 0f)
+        assertEquals(listOf(25f, 17f), demo.segments.map { it.percent })
+        assertEquals(demo.overallPercent!!, demo.segments.sumOf { it.percent.toDouble() }.toFloat(), 0f)
+        assertEquals("Resets Jan 1, 2030, 12:00 PM", resetLabel(demo.botResetRaw))
+    }
+
+    @Test
     fun classicDashboard() {
         val parsed = UsageParser.parse(
             """

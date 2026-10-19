@@ -57,6 +57,7 @@ import ch.castellon.grok.usage.PreviewDoor
 import ch.castellon.grok.usage.R
 import ch.castellon.grok.usage.StatusKind
 import ch.castellon.grok.usage.UsageViewModel
+import ch.castellon.grok.usage.showDashboardWeb
 import ch.castellon.grok.usage.showReadingCover
 import ch.castellon.grok.usage.showSessionHome
 import ch.castellon.grok.usage.showSignInActions
@@ -114,7 +115,7 @@ fun AppRoot(vm: UsageViewModel = viewModel()) {
 
     LaunchedEffect(Unit) {
         val intent = (context as? Activity)?.intent
-        PreviewDoor.snapshotFrom(intent)?.let { vm.showPreview(it) }
+        if (PreviewDoor.requested(intent)) vm.startDemo()
         if (PreviewDoor.scrollRequested(intent)) vm.requestScroll()
         if (vm.hasStoredSession()) {
             vm.resumeSignIn(fromSession = true)
@@ -169,9 +170,10 @@ fun AppRoot(vm: UsageViewModel = viewModel()) {
     val interactive = showSignInWeb(vm.phase, vm.readingUsage, vm.sessionKnown) || vm.phase == Phase.Official
     val sessionHome = showSessionHome(vm.phase, vm.sessionKnown, vm.snapshot != null)
     val readingCover = showReadingCover(vm.phase, vm.readingUsage, vm.sessionKnown)
-    val showWeb = !vm.holdPreview && vm.phase != Phase.SignedOut
+    val showWeb = showDashboardWeb(vm.phase, vm.demo)
     val banner = bannerLabel(vm.snapshot?.overallPercent, vm.snapshot?.botPercent)
-    LaunchedEffect(vm.notifyEnabled, banner) {
+    LaunchedEffect(vm.notifyEnabled, banner, vm.demo) {
+        if (vm.demo) return@LaunchedEffect
         UsageWidgets.refresh(context, vm.snapshot?.overallPercent, vm.snapshot?.botPercent)
         android.util.Log.i("GrokUsage", "status gate on=${vm.notifyEnabled} ready=${banner != null}")
         if (!vm.notifyEnabled || banner == null) {
@@ -185,6 +187,7 @@ fun AppRoot(vm: UsageViewModel = viewModel()) {
         UsageNotifier.show(context, vm.snapshot?.overallPercent, vm.snapshot?.botPercent)
     }
 
+    BackHandler(enabled = vm.demo, onBack = vm::exitDemo)
     BackHandler(enabled = interactive) {
         val web = webRef.value
         if (web != null && web.canGoBack()) web.goBack() else vm.closeWeb()
@@ -257,7 +260,9 @@ fun AppRoot(vm: UsageViewModel = viewModel()) {
                         scrollTick = vm.scrollTick,
                         scrollTopTick = vm.scrollTopTick,
                         accountLabel = vm.accountLabel,
-                        onRefresh = vm::refresh,
+                        demo = vm.demo,
+                        onExitDemo = vm::exitDemo,
+                        onRefresh = { if (!vm.demo) vm.refresh() },
                         onCardsVisible = { cardsVisible = it },
                         onOpenGrok = { openGrokUsage(context) },
                         onSignInAgain = vm::startSignIn,
@@ -305,6 +310,7 @@ fun AppRoot(vm: UsageViewModel = viewModel()) {
                 Surface(modifier = Modifier.fillMaxSize(), color = Bg) {
                     SignInScreen(
                         onSignIn = vm::startSignIn,
+                        onDemo = vm::startDemo,
                         onOpenOfficial = { openExternal(context, GrokLinks.DASHBOARD) },
                         onPrivacy = { privacyOpen = true },
                         notice = if (vm.status == StatusKind.SignInTimedOut) {

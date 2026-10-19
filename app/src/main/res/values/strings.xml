@@ -32,6 +32,10 @@
     <string name="status_need_page">Open Usage on the page below. The bars fill in from that page.</string>
     <string name="status_sign_in_timeout">Sign-in waited too long, so that check was cancelled.</string>
     <string name="sign_in_again">Sign in again</string>
+    <string name="demo_try">Try demo (sample data)</string>
+    <string name="demo_label">Demo data</string>
+    <string name="demo_body">Sample numbers only. Nothing is loaded from Grok.</string>
+    <string name="demo_exit">Exit demo</string>
     <string name="notify_title">Show in notifications</string>
     <string name="notify_body">Shows the bot percent on the status bar. Both numbers stay in the notification.</string>
     <string name="widget_name">Grok usage</string>
@@ -46,5 +50,5 @@
     <string name="notify_channel_body">Latest usage and bot percentages.</string>
     <string name="cd_banner">Usage summary. Tap to show the full cards.</string>
     <string name="cd_usage_bar">%1$s percent used</string>
-    <string name="privacy_body">Grok Usage is an unofficial app and is not affiliated with xAI. It does not run a server and it does not see your password. Sign-in opens the official page inside this app. If that page waits too long, the check is cancelled and those cookies are deleted. Saved usage numbers stay on this phone until you sign out.</string>
+    <string name="privacy_body">Usage Meter for Grok is an unofficial app and is not affiliated with xAI. It does not run a server and it does not see your password. Sign-in opens the official page inside this app. If that page waits too long, the check is cancelled and those cookies are deleted. Saved usage numbers stay on this phone until you sign out.</string>
 </resources>
