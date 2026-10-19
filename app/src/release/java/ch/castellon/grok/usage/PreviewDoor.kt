@@ -4,7 +4,7 @@ import android.content.Intent
 
 @Suppress("UNUSED_PARAMETER")
 object PreviewDoor {
-    fun snapshotFrom(intent: Intent?): UsageSnapshot? = null
+    fun requested(intent: Intent?): Boolean = false
 
     fun scrollRequested(intent: Intent?): Boolean = false
 }

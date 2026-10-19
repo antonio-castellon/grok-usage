@@ -36,6 +36,11 @@ internal fun showSessionHome(phase: Phase, sessionKnown: Boolean, hasSnapshot: B
 
 internal fun showSignInActions(sessionKnown: Boolean): Boolean = !sessionKnown
 
+/** The demo never creates or loads the dashboard WebView. */
+internal fun showDashboardWeb(phase: Phase, demo: Boolean): Boolean {
+    return !demo && phase != Phase.SignedOut
+}
+
 internal fun signInWaitExpired(startedAtEpochMs: Long, nowEpochMs: Long, waitMs: Long = SIGN_IN_WAIT_MS): Boolean {
     if (startedAtEpochMs <= 0L) return false
     return nowEpochMs - startedAtEpochMs >= waitMs
@@ -60,7 +65,8 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var scrollTopTick by mutableIntStateOf(0)
         private set
-    var holdPreview by mutableStateOf(false)
+    var demo by mutableStateOf(false)
+        private set
     var readingUsage by mutableStateOf(false)
         private set
     var sessionKnown by mutableStateOf(false)
@@ -164,7 +170,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
                 readingUsage = false
                 phase = Phase.Ready
             } else if (phase != Phase.SigningIn) {
-                holdPreview = false
+                leaveDemo()
                 readingUsage = true
                 phase = Phase.SigningIn
             }
@@ -179,7 +185,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         if (phase == Phase.SigningIn) return
-        holdPreview = false
+        leaveDemo()
         store.markSignInStarted(System.currentTimeMillis())
         readingUsage = true
         webTarget = GrokLinks.DASHBOARD
@@ -187,7 +193,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun startSignIn() {
-        holdPreview = false
+        leaveDemo()
         readingUsage = true
         store.markSignInStarted(System.currentTimeMillis())
         webTarget = GrokLinks.DASHBOARD
@@ -222,7 +228,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun openOfficial(url: String) {
-        holdPreview = false
+        leaveDemo()
         webTarget = url
         loadToken++
         refreshing = false
@@ -252,7 +258,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onUsageUnread() {
-        if (phase == Phase.Official || holdPreview) return
+        if (phase == Phase.Official || demo) return
         readingUsage = false
         refreshing = false
         store.clearSignInStarted()
@@ -268,7 +274,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun refresh() {
-        holdPreview = false
+        leaveDemo()
         if (snapshot == null && !sessionKnown) {
             startSignIn()
             return
@@ -285,7 +291,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onBotMeter(meter: BotMeter) {
-        if (holdPreview) return
+        if (demo) return
         pendingBot = meter
         val current = snapshot ?: return
         if (current.botPercent != null) return
@@ -300,7 +306,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onParsed(parsed: ParsedUsage) {
-        if (holdPreview) return
+        if (demo) return
         var snap = UsageSnapshot.from(parsed, System.currentTimeMillis())
         if (snap.botPercent == null) {
             pendingBot?.let { bot ->
@@ -320,7 +326,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onGiveUp() {
-        if (holdPreview || phase == Phase.SignedOut) return
+        if (demo || phase == Phase.SignedOut) return
         if (phase == Phase.Official) return
         if (phase == Phase.SigningIn && sessionKnown) return
         refreshing = false
@@ -328,7 +334,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun signOut() {
-        holdPreview = false
+        leaveDemo()
         readingUsage = false
         sessionKnown = false
         accountLabel = null
@@ -344,12 +350,26 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
         phase = Phase.SignedOut
     }
 
-    fun showPreview(preview: UsageSnapshot) {
-        holdPreview = true
-        snapshot = preview
+    fun startDemo() {
+        demo = true
+        snapshot = DemoData.snapshot
         phase = Phase.Ready
         status = StatusKind.Saved
         refreshing = false
+    }
+
+    fun exitDemo() {
+        if (!demo) return
+        leaveDemo()
+        refreshing = false
+        status = if (snapshot == null) StatusKind.Empty else StatusKind.Saved
+        phase = if (snapshot == null) Phase.SignedOut else Phase.Ready
+    }
+
+    private fun leaveDemo() {
+        if (!demo) return
+        demo = false
+        snapshot = store.load()
     }
 
     fun requestScroll() {

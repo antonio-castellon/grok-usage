@@ -24,6 +24,7 @@ import ch.castellon.grok.usage.R
 @Composable
 fun SignInScreen(
     onSignIn: () -> Unit,
+    onDemo: () -> Unit,
     onOpenOfficial: () -> Unit,
     onPrivacy: () -> Unit,
     notice: String? = null,
@@ -74,6 +75,15 @@ fun SignInScreen(
                     .heightIn(min = 52.dp),
             ) {
                 Text(stringResource(R.string.open_official), fontSize = 16.sp)
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = onDemo,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 52.dp),
+            ) {
+                Text(stringResource(R.string.demo_try), fontSize = 16.sp)
             }
             if (notice != null) {
                 Spacer(Modifier.height(16.dp))
