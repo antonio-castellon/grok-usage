@@ -18,9 +18,11 @@ Grok and xAI are trademarks of their owners.
 
 The interface is English only.
 
-![Sign in](docs/img/signin.png)
-![Usage cards](docs/img/cards.png)
-![Banner when the cards are scrolled away](docs/img/banner.png)
+<p>
+<img src="docs/img/signin.png" alt="Sign in" width="33%">
+<img src="docs/img/cards.png" alt="Usage cards" width="33%">
+<img src="docs/img/banner.png" alt="Banner when the cards are scrolled away" width="33%">
+</p>
 
 ## Requirements
 
