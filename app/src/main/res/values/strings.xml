@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Usage Meter for Grok</string>
-    <string name="kicker">GROK USAGE</string>
+    <string name="kicker">USAGE METER FOR GROK</string>
     <string name="hero_title">Your Grok usage</string>
     <string name="hero_body">Sign in stays in this app. When the official Usage section appears, the bars fill in. Open official Usage leaves the app and opens the dashboard in your browser.</string>
     <string name="sign_in">Sign in with Grok</string>
