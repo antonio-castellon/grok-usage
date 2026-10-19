@@ -9,6 +9,9 @@ import android.content.Intent
 import android.widget.RemoteViews
 
 class UsageWidget : AppWidgetProvider() {
+    override fun onEnabled(context: Context) = UsageRefresh.sync(context)
+    override fun onDisabled(context: Context) = UsageRefresh.sync(context)
+
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         val snapshot = UsageStore(context).load()
         UsageWidgets.refresh(context, snapshot?.overallPercent, snapshot?.botPercent)
@@ -16,6 +19,9 @@ class UsageWidget : AppWidgetProvider() {
 }
 
 class ClockWidget : AppWidgetProvider() {
+    override fun onEnabled(context: Context) = UsageRefresh.sync(context)
+    override fun onDisabled(context: Context) = UsageRefresh.sync(context)
+
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         val snapshot = UsageStore(context).load()
         UsageWidgets.refresh(context, snapshot?.overallPercent, snapshot?.botPercent)

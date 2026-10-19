@@ -169,7 +169,7 @@ private const val SESSION_PROBE = """
 })()
 """
 
-private const val EXTRACT = """
+internal const val EXTRACT = """
 (function(){
   try {
     var t = (document.body && document.body.innerText) || '';
@@ -179,7 +179,7 @@ private const val EXTRACT = """
 })()
 """
 
-private const val BOT_ASK = """
+internal const val BOT_ASK = """
 (function(){
   var finished = false;
   var ws = null;
@@ -652,14 +652,14 @@ private class UsageWebClient(
     }
 }
 
-private fun mobileUserAgent(raw: String?): String {
+internal fun mobileUserAgent(raw: String?): String {
     val base = raw?.takeIf { it.isNotBlank() }
         ?: "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
     val chrome = Regex("Chrome/[\\d.]+").find(base)?.value ?: "Chrome/131.0.0.0"
     return "Mozilla/5.0 (Linux; Android 14; K) AppleWebKit/537.36 (KHTML, like Gecko) $chrome Mobile Safari/537.36"
 }
 
-private fun hideAppIdentity(settings: WebSettings) {
+internal fun hideAppIdentity(settings: WebSettings) {
     if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
         WebSettingsCompat.setRequestedWithHeaderOriginAllowList(settings, emptySet())
     }

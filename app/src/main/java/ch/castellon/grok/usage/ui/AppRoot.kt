@@ -64,6 +64,7 @@ import ch.castellon.grok.usage.showSignInActions
 import ch.castellon.grok.usage.showSignInWeb
 import kotlinx.coroutines.delay
 import ch.castellon.grok.usage.UsageNotifier
+import ch.castellon.grok.usage.UsageRefresh
 import ch.castellon.grok.usage.UsageWidgets
 import ch.castellon.grok.usage.bannerLabel
 import ch.castellon.grok.usage.session.DashboardWebView
@@ -117,6 +118,7 @@ fun AppRoot(vm: UsageViewModel = viewModel()) {
         val intent = (context as? Activity)?.intent
         if (PreviewDoor.requested(intent)) vm.startDemo()
         if (PreviewDoor.scrollRequested(intent)) vm.requestScroll()
+        UsageRefresh.sync(context)
         if (vm.hasStoredSession()) {
             vm.resumeSignIn(fromSession = true)
         } else if (vm.hasUnfinishedSignIn()) {

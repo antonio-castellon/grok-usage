@@ -1,7 +1,6 @@
 package ch.castellon.grok.usage
 
 import android.app.Application
-import android.webkit.CookieManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -101,6 +100,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
         if (notifyEnabled == enabled) return
         notifyEnabled = enabled
         store.saveNotify(enabled)
+        UsageRefresh.sync(getApplication())
     }
 
     fun onAccountName(name: String) {
@@ -205,12 +205,8 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
 
     fun hasUnfinishedSignIn(): Boolean = store.signInStartedAt() > 0L
 
-    fun hasStoredSession(): Boolean {
-        val jar = runCatching { CookieManager.getInstance() }.getOrNull() ?: return false
-        return sessionCookieUrls.any { url ->
-            cookieLooksSignedIn(runCatching { jar.getCookie(url) }.getOrNull())
-        }
-    }
+    fun hasStoredSession(): Boolean = UsageRefresh.hasStoredSession()
+
 
     fun signInRemainingMs(nowEpochMs: Long = System.currentTimeMillis()): Long {
         val started = store.signInStartedAt()
@@ -307,14 +303,8 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onParsed(parsed: ParsedUsage) {
         if (demo) return
-        var snap = UsageSnapshot.from(parsed, System.currentTimeMillis())
-        if (snap.botPercent == null) {
-            pendingBot?.let { bot ->
-                snap = snap.copy(botPercent = bot.percent, botResetRaw = bot.resetRaw)
-            }
-        } else {
-            pendingBot = null
-        }
+        val snap = UsageSnapshot.from(parsed, pendingBot, System.currentTimeMillis())
+        if (parsed.botPercent != null) pendingBot = null
         snapshot = snap
         store.save(snap)
         store.clearSignInStarted()
@@ -323,6 +313,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
         refreshing = false
         status = StatusKind.Updated
         if (phase == Phase.SigningIn || phase == Phase.SignedOut) phase = Phase.Ready
+        UsageRefresh.sync(getApplication())
     }
 
     fun onGiveUp() {
@@ -343,6 +334,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
         snapshot = null
         store.clearSignInStarted()
         store.clear()
+        UsageRefresh.cancel(getApplication())
         refreshing = false
         status = StatusKind.Empty
         webTarget = GrokLinks.DASHBOARD
@@ -380,12 +372,4 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
         scrollTopTick++
     }
 
-    private companion object {
-        val sessionCookieUrls = arrayOf(
-            "https://grok.com",
-            "https://grok.com/dashboard",
-            "https://accounts.x.ai",
-            "https://accounts.spacex.ai",
-        )
-    }
 }
