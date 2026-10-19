@@ -20,8 +20,8 @@ The interface is English only.
 
 <p>
 <img src="docs/img/signin.png" alt="Sign in" width="33%">
-<img src="docs/img/cards.png" alt="Usage cards" width="33%">
-<img src="docs/img/banner.png" alt="Banner when the cards are scrolled away" width="33%">
+<img src="docs/img/cards.png" alt="Usage cards (demo data)" width="33%">
+<img src="docs/img/banner.png" alt="Weekly Grok Bot limit (demo data)" width="33%">
 </p>
 
 ## Requirements
