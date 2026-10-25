@@ -17,7 +17,7 @@ class UsageStore(context: Context) {
     }
 
     fun clear() {
-        prefs.edit().remove(KEY).remove(STARTED).remove(ACCOUNT).apply()
+        prefs.edit().remove(KEY).remove(STARTED).remove(WALL).remove(ACCOUNT).apply()
     }
 
     fun forgetSnapshot() {
@@ -36,8 +36,15 @@ class UsageStore(context: Context) {
         prefs.edit().putLong(STARTED, nowEpochMs).apply()
     }
 
+    /** Real start of this attempt. Pauses do not move it. */
+    fun signInWallStart(): Long = prefs.getLong(WALL, 0L)
+
+    fun markSignInWall(nowEpochMs: Long) {
+        prefs.edit().putLong(WALL, nowEpochMs).apply()
+    }
+
     fun clearSignInStarted() {
-        prefs.edit().remove(STARTED).apply()
+        prefs.edit().remove(STARTED).remove(WALL).apply()
     }
 
     fun loadNotify(): Boolean = prefs.getBoolean(NOTIFY, false)
@@ -98,6 +105,7 @@ class UsageStore(context: Context) {
         const val PREFS = "usage"
         const val KEY = "snapshot"
         const val STARTED = "signInStartedAt"
+        const val WALL = "signInWallStart"
         const val ACCOUNT = "accountLabel"
         const val NOTIFY = "notifyEnabled"
     }

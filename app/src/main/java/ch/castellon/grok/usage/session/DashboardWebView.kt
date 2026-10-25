@@ -312,11 +312,14 @@ fun DashboardWebView(
             }
             if (appliedIme[0] != imeBottomCssPx) {
                 appliedIme[0] = imeBottomCssPx
-                web.post {
-                    web.evaluateJavascript(
-                        "window.__grokIme=$imeBottomCssPx; if (window.__grokUsageFit) window.__grokUsageFit();",
-                        null,
-                    )
+                val host = web.url?.let { hostOf(it) }.orEmpty()
+                if (injectUsageScript(host)) {
+                    web.post {
+                        web.evaluateJavascript(
+                            "window.__grokIme=$imeBottomCssPx; if (window.__grokUsageFit) window.__grokUsageFit();",
+                            null,
+                        )
+                    }
                 }
             }
         },
@@ -525,6 +528,8 @@ private class UsageWebClient(
         )
         callbacks.onPage(url)
         val host = url?.let { hostOf(it) }.orEmpty()
+        CookieManager.getInstance().flush()
+        if (!injectUsageScript(host)) return
         if (host == "accounts.x.ai" || host == "accounts.spacex.ai") {
             view.postDelayed({
                 val now = view.url?.let { hostOf(it) }.orEmpty()
@@ -539,7 +544,6 @@ private class UsageWebClient(
                 }
             }, 2000)
         }
-        CookieManager.getInstance().flush()
         if (url != null && leaveForUsage(callbacks, view, url, callbacks.signingIn())) return
         if (callbacks.signingIn()) probeSession(view, url)
         if (url != null && callbacks.signingIn() && loginHandsOffToDashboard(url)) {
@@ -569,7 +573,12 @@ private class UsageWebClient(
         view.evaluateJavascript(SESSION_PROBE) { raw ->
             val kind = raw?.trim()?.trim('"') ?: return@evaluateJavascript
             if (!callbacks.signingIn()) return@evaluateJavascript
-            if (kind == "wait" || kind == "usage") return@evaluateJavascript
+            if (kind == "wait") {
+                val host = url?.let { hostOf(it) }.orEmpty()
+                if (holdsSignIn(host)) callbacks.onNeedLogin()
+                return@evaluateJavascript
+            }
+            if (kind == "usage") return@evaluateJavascript
             if (kind == "account") callbacks.onSessionConfirmed()
             if (callbacks.sessionKnown()) return@evaluateJavascript
             val foreign = url != null && (prefersXaiAccount(url) || kind == "account" || isXaiAccountHome(url))
@@ -577,7 +586,7 @@ private class UsageWebClient(
                 callbacks.onAccountShell()
                 if (!callbacks.dashboardHandoffUsed) {
                     callbacks.dashboardHandoffUsed = true
-                    view.loadUrl(GrokLinks.DASHBOARD)
+                    view.loadUrl(GrokLinks.USAGE)
                 } else {
                     callbacks.onNeedLogin()
                 }
@@ -750,7 +759,7 @@ private fun leaveForUsage(callbacks: WebCallbacks, view: WebView, url: String, s
     if (callbacks.sessionKnown()) return false
     if (!callbacks.dashboardHandoffUsed) {
         callbacks.dashboardHandoffUsed = true
-        view.loadUrl(GrokLinks.DASHBOARD)
+        view.loadUrl(GrokLinks.USAGE)
     } else {
         callbacks.onNeedLogin()
     }
@@ -773,6 +782,13 @@ internal fun hostAllowed(host: String): Boolean {
     return allowedSuffixes.any { suffix ->
         normalized == suffix || normalized.endsWith(".$suffix")
     }
+}
+
+/** Google's sign-in page fails when the app injects scripts or reloads it mid-check. */
+internal fun injectUsageScript(host: String): Boolean {
+    val normalized = host.lowercase()
+    if (normalized.isEmpty()) return true
+    return !normalized.contains("google.")
 }
 
 internal fun holdsSignIn(host: String): Boolean {

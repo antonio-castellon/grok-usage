@@ -22,6 +22,15 @@ class UsageRefreshTest {
     }
 
     @Test
+    fun backgroundFollowsTheSessionBackToGrok() {
+        assertTrue(backgroundMayNavigate("grok.com"))
+        assertTrue(backgroundMayNavigate("accounts.x.ai"))
+        assertTrue(backgroundMayNavigate("accounts.spacex.ai"))
+        assertFalse(backgroundMayNavigate("accounts.google.com"))
+        assertFalse(backgroundMayNavigate("example.com"))
+    }
+
+    @Test
     fun separateBotMeterFillsAMissingBotCard() {
         val parsed = ParsedUsage(42f, "r", emptyList(), null, null)
         val snap = UsageSnapshot.from(parsed, BotMeter(60f, "b"), 7L)

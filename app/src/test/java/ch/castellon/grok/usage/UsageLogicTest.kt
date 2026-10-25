@@ -4,6 +4,7 @@ import ch.castellon.grok.usage.session.hostAllowed
 import ch.castellon.grok.usage.session.isGrokHost
 import ch.castellon.grok.usage.session.prefersXaiAccount
 import ch.castellon.grok.usage.session.holdsSignIn
+import ch.castellon.grok.usage.session.injectUsageScript
 import ch.castellon.grok.usage.session.isLoginReturnUrl
 import ch.castellon.grok.usage.session.isXaiAccountHome
 import ch.castellon.grok.usage.session.loginHandsOffToDashboard
@@ -178,6 +179,9 @@ class UsageLogicTest {
         assertFalse(prefersXaiAccount("https://accounts.x.ai/sign-in?redirect=grok"))
         assertTrue(isXaiAccountHome("https://accounts.x.ai/account"))
         assertFalse(isXaiAccountHome("https://accounts.x.ai/sign-in?redirect=grok"))
+        assertFalse(injectUsageScript("accounts.google.com"))
+        assertTrue(injectUsageScript("grok.com"))
+        assertTrue(holdsSignIn("accounts.google.com"))
     }
 
     @Test
@@ -229,6 +233,7 @@ class UsageLogicTest {
     fun storedSessionOpensUsageInsteadOfSignIn() {
         assertFalse(showSignInWeb(Phase.SigningIn, readingUsage = true, sessionKnown = true))
         assertFalse(showSignInWeb(Phase.SigningIn, readingUsage = false, sessionKnown = true))
+        assertTrue(showSignInWeb(Phase.SigningIn, readingUsage = false, sessionKnown = true, providerHold = true))
         assertFalse(showSignInWeb(Phase.SigningIn, readingUsage = true, sessionKnown = false))
         assertTrue(showSignInWeb(Phase.SigningIn, readingUsage = false, sessionKnown = false))
         assertTrue(showSessionHome(Phase.SigningIn, sessionKnown = true, hasSnapshot = false))
@@ -246,6 +251,8 @@ class UsageLogicTest {
         assertFalse(signInWaitExpired(0L, 180_000L))
         assertFalse(signInWaitExpired(1_000L, 180_999L))
         assertTrue(signInWaitExpired(1_000L, 181_000L))
+        assertEquals(60_000L, signInWallRemaining(1_000L, 121_000L))
+        assertEquals(0L, signInWallRemaining(1_000L, 181_000L))
     }
 
     @Test
