@@ -36,6 +36,7 @@ data class UsageSnapshot(
 
 object GrokLinks {
     const val DASHBOARD = "https://grok.com/dashboard"
+    const val USAGE = "https://grok.com/?_s=usage"
     const val SIGN_IN = "https://accounts.x.ai/sign-in?redirect=grok"
     const val ACCOUNT = "https://accounts.x.ai/account"
     const val BILLING = "https://grok.com/dashboard/billing"

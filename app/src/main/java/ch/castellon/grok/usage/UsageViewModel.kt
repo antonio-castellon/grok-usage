@@ -21,8 +21,14 @@ internal fun cookieLooksSignedIn(header: String?): Boolean {
     }
 }
 
-internal fun showSignInWeb(phase: Phase, readingUsage: Boolean, sessionKnown: Boolean): Boolean {
-    return phase == Phase.SigningIn && !readingUsage && !sessionKnown
+internal fun showSignInWeb(
+    phase: Phase,
+    readingUsage: Boolean,
+    sessionKnown: Boolean,
+    providerHold: Boolean = false,
+): Boolean {
+    if (phase != Phase.SigningIn || readingUsage) return false
+    return !sessionKnown || providerHold
 }
 
 internal fun showReadingCover(phase: Phase, readingUsage: Boolean, sessionKnown: Boolean): Boolean {
@@ -43,6 +49,12 @@ internal fun showDashboardWeb(phase: Phase, demo: Boolean): Boolean {
 internal fun signInWaitExpired(startedAtEpochMs: Long, nowEpochMs: Long, waitMs: Long = SIGN_IN_WAIT_MS): Boolean {
     if (startedAtEpochMs <= 0L) return false
     return nowEpochMs - startedAtEpochMs >= waitMs
+}
+
+/** Time left that ignores pauses on Google. A stuck provider page cannot wait forever. */
+internal fun signInWallRemaining(wallStartEpochMs: Long, nowEpochMs: Long, hardMs: Long = SIGN_IN_WAIT_MS): Long {
+    if (wallStartEpochMs <= 0L) return hardMs
+    return (hardMs - (nowEpochMs - wallStartEpochMs)).coerceAtLeast(0L)
 }
 
 class UsageViewModel(app: Application) : AndroidViewModel(app) {
@@ -132,6 +144,10 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
             providerSince = 0L
         }
         providerHold = hold
+        // Google and Cursor stay on screen. The cover is what left the heavy account spinning.
+        if (hold && phase == Phase.SigningIn && readingUsage) {
+            readingUsage = false
+        }
     }
 
     fun noteLeftDuringSignIn() {
@@ -186,7 +202,9 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (phase == Phase.SigningIn) return
         leaveDemo()
-        store.markSignInStarted(System.currentTimeMillis())
+        val now = System.currentTimeMillis()
+        store.markSignInStarted(now)
+        store.markSignInWall(now)
         readingUsage = true
         webTarget = GrokLinks.DASHBOARD
         phase = Phase.SigningIn
@@ -195,7 +213,9 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
     fun startSignIn() {
         leaveDemo()
         readingUsage = true
-        store.markSignInStarted(System.currentTimeMillis())
+        val now = System.currentTimeMillis()
+        store.markSignInStarted(now)
+        store.markSignInWall(now)
         webTarget = GrokLinks.DASHBOARD
         loadToken++
         refreshing = false
@@ -212,6 +232,10 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
         val started = store.signInStartedAt()
         if (started <= 0L) return SIGN_IN_WAIT_MS
         return (SIGN_IN_WAIT_MS - (nowEpochMs - started)).coerceAtLeast(0L)
+    }
+
+    fun signInWallRemainingMs(nowEpochMs: Long = System.currentTimeMillis()): Long {
+        return signInWallRemaining(store.signInWallStart(), nowEpochMs)
     }
 
     fun abandonStuckSignIn() {
@@ -238,14 +262,11 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
         phase = if (snapshot == null) Phase.SignedOut else Phase.Ready
     }
 
-    fun onAccountShell() {
-        if (phase != Phase.SigningIn) return
-        readingUsage = true
-    }
+    fun onAccountShell() = Unit
 
     fun onSessionConfirmed() {
         sessionKnown = true
-        if (phase == Phase.SigningIn) readingUsage = true
+        if (phase == Phase.SigningIn && !providerHold) readingUsage = true
     }
 
     fun onNeedLogin() {
@@ -290,7 +311,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
         if (demo) return
         pendingBot = meter
         val current = snapshot ?: return
-        if (current.botPercent != null) return
+        if (current.botPercent == meter.percent && current.botResetRaw == meter.resetRaw) return
         val updated = current.copy(
             botPercent = meter.percent,
             botResetRaw = meter.resetRaw,
@@ -299,6 +320,11 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
         snapshot = updated
         store.save(updated)
         status = StatusKind.Updated
+        val app = getApplication<Application>()
+        UsageWidgets.refresh(app, updated.overallPercent, updated.botPercent)
+        if (store.loadNotify() && UsageNotifier.canPost(app)) {
+            UsageNotifier.show(app, updated.overallPercent, updated.botPercent)
+        }
     }
 
     fun onParsed(parsed: ParsedUsage) {
@@ -319,8 +345,12 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
     fun onGiveUp() {
         if (demo || phase == Phase.SignedOut) return
         if (phase == Phase.Official) return
-        if (phase == Phase.SigningIn && sessionKnown) return
+        if (phase == Phase.SigningIn && sessionKnown) {
+            onUsageUnread()
+            return
+        }
         refreshing = false
+        readingUsage = false
         status = if (snapshot != null) StatusKind.RefreshFailed else StatusKind.NeedUsagePage
     }
 

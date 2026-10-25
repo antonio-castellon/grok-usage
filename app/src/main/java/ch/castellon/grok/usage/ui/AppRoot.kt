@@ -63,8 +63,11 @@ import ch.castellon.grok.usage.showSessionHome
 import ch.castellon.grok.usage.showSignInActions
 import ch.castellon.grok.usage.showSignInWeb
 import kotlinx.coroutines.delay
+import ch.castellon.grok.usage.session.holdsSignIn
+import ch.castellon.grok.usage.session.hostOf
 import ch.castellon.grok.usage.UsageNotifier
 import ch.castellon.grok.usage.UsageRefresh
+import ch.castellon.grok.usage.UsageVisibility
 import ch.castellon.grok.usage.UsageWidgets
 import ch.castellon.grok.usage.bannerLabel
 import ch.castellon.grok.usage.session.DashboardWebView
@@ -134,28 +137,43 @@ fun AppRoot(vm: UsageViewModel = viewModel()) {
         clearWebSession(webRef.value)
         vm.abandonStuckSignIn()
     }
+    LaunchedEffect(vm.phase, vm.loadToken, vm.sessionKnown, vm.providerHold, vm.readingUsage) {
+        if (vm.phase != Phase.SigningIn || vm.sessionKnown) return@LaunchedEffect
+        if (vm.providerHold && !vm.readingUsage) return@LaunchedEffect
+        delay(vm.signInWallRemainingMs())
+        if (vm.phase != Phase.SigningIn || vm.sessionKnown) return@LaunchedEffect
+        if (vm.providerHold && !vm.readingUsage) return@LaunchedEffect
+        clearWebSession(webRef.value)
+        vm.abandonStuckSignIn()
+    }
     LaunchedEffect(vm.phase, vm.loadToken, vm.sessionKnown) {
         if (vm.phase != Phase.SigningIn || !vm.sessionKnown) return@LaunchedEffect
         delay(30_000)
-        if (vm.phase == Phase.SigningIn && vm.sessionKnown) vm.onUsageUnread()
+        if (vm.phase == Phase.SigningIn && vm.sessionKnown && !vm.providerHold) vm.onUsageUnread()
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_STOP -> {
+                    UsageVisibility.visible = false
                     CookieManager.getInstance().flush()
                     vm.noteLeftDuringSignIn()
                     vm.pauseSignInClock(true)
+                    if (vm.phase != Phase.SigningIn) UsageRefresh.launch(context)
                 }
                 Lifecycle.Event.ON_START -> {
+                    UsageVisibility.visible = true
                     vm.pauseSignInClock(false)
                     if (waitNotifySettings.value) {
                         waitNotifySettings.value = false
                         if (UsageNotifier.canPost(context)) vm.chooseNotify(true)
                     }
                     if (vm.returnedFromProvider()) {
-                        webRef.value?.postDelayed({ webRef.value?.reload() }, 700)
+                        val host = webRef.value?.url?.let { hostOf(it) }.orEmpty()
+                        if (!holdsSignIn(host)) {
+                            webRef.value?.postDelayed({ webRef.value?.reload() }, 700)
+                        }
                     }
                 }
                 else -> Unit
@@ -169,7 +187,7 @@ fun AppRoot(vm: UsageViewModel = viewModel()) {
         callbacks.dashboardHandoffUsed = false
     }
 
-    val interactive = showSignInWeb(vm.phase, vm.readingUsage, vm.sessionKnown) || vm.phase == Phase.Official
+    val interactive = showSignInWeb(vm.phase, vm.readingUsage, vm.sessionKnown, vm.providerHold) || vm.phase == Phase.Official
     val sessionHome = showSessionHome(vm.phase, vm.sessionKnown, vm.snapshot != null)
     val readingCover = showReadingCover(vm.phase, vm.readingUsage, vm.sessionKnown)
     val showWeb = showDashboardWeb(vm.phase, vm.demo)

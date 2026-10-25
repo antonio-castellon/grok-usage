@@ -4,8 +4,11 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- WorkManager's foreground runner is never used; the background pull is a plain periodic job. -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Lets the clock widget refresh after the app has been closed for a long time. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
     <queries>
         <package android:name="ai.x.grok" />
@@ -46,6 +49,18 @@
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             tools:node="remove" />
+        <service
+            android:name=".UsageRefreshService"
+            android:exported="false"
+            android:foregroundServiceType="shortService" />
+        <receiver
+            android:name=".RefreshAlarm"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="ch.castellon.grok.usage.REFRESH_USAGE" />
+            </intent-filter>
+        </receiver>
         <receiver
             android:name=".UsageWidget"
             android:exported="true"

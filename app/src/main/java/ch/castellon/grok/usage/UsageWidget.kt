@@ -15,6 +15,7 @@ class UsageWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         val snapshot = UsageStore(context).load()
         UsageWidgets.refresh(context, snapshot?.overallPercent, snapshot?.botPercent)
+        UsageRefresh.launch(context)
     }
 }
 
@@ -25,6 +26,7 @@ class ClockWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         val snapshot = UsageStore(context).load()
         UsageWidgets.refresh(context, snapshot?.overallPercent, snapshot?.botPercent)
+        UsageRefresh.launch(context)
     }
 }
 
