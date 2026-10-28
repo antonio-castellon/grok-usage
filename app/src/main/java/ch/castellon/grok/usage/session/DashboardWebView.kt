@@ -517,6 +517,7 @@ private class UsageWebClient(
             val uri = request.url
             android.util.Log.i("GrokUsage", "nav " + (uri.host ?: "none") + pathOf(uri.toString()))
         }
+        if (request.isForMainFrame && leaveUnify(callbacks, view, request.url.toString())) return true
         if (request.isForMainFrame && leaveForUsage(callbacks, view, request.url.toString(), callbacks.signingIn())) return true
         return consumeNavigation(view, request.url)
     }
@@ -529,6 +530,7 @@ private class UsageWebClient(
         callbacks.onPage(url)
         val host = url?.let { hostOf(it) }.orEmpty()
         CookieManager.getInstance().flush()
+        if (url != null && leaveUnify(callbacks, view, url)) return
         if (!injectUsageScript(host)) return
         if (host == "accounts.x.ai" || host == "accounts.spacex.ai") {
             view.postDelayed({
@@ -602,6 +604,13 @@ private class UsageWebClient(
         error: WebResourceError,
     ) {
         if (!request.isForMainFrame) return
+        val failed = request.url?.toString().orEmpty()
+        if (callbacks.sessionKnown() && !callbacks.usageFallbackUsed && !failed.contains("_s=usage")) {
+            callbacks.usageFallbackUsed = true
+            android.util.Log.i("GrokUsage", "fallback grok.com/?_s=usage")
+            view.loadUrl(GrokLinks.USAGE)
+            return
+        }
         chain++
         callbacks.onGiveUp()
     }
@@ -637,7 +646,7 @@ private class UsageWebClient(
                 attempt >= 2 &&
                 callbacks.sessionKnown() &&
                 !callbacks.usageFallbackUsed &&
-                (host.endsWith("cursor.com") || host.endsWith("cursor.sh"))
+                (host.endsWith("cursor.com") || host.endsWith("cursor.sh") || path.contains("/unify"))
             ) {
                 callbacks.usageFallbackUsed = true
                 android.util.Log.i("GrokUsage", "fallback grok.com/?_s=usage")
@@ -734,6 +743,12 @@ private fun httpsFromAppScheme(uri: Uri): String? {
     return uri.buildUpon().scheme("https").build().toString()
 }
 
+/** grok.com/dashboard now bounces to /unify, which shows an application error and no usage. */
+internal fun shouldLeaveUnify(url: String, signingIn: Boolean, sessionKnown: Boolean): Boolean {
+    if (!pathOf(url).contains("/unify")) return false
+    return sessionKnown || !signingIn
+}
+
 internal fun prefersXaiAccount(url: String): Boolean {
     val host = hostOf(url) ?: return false
     return host == "cursor.com" || host.endsWith(".cursor.com") ||
@@ -749,6 +764,15 @@ internal fun isXaiAccountHome(url: String): Boolean {
     ) {
         return false
     }
+    return true
+}
+
+private fun leaveUnify(callbacks: WebCallbacks, view: WebView, url: String): Boolean {
+    if (!shouldLeaveUnify(url, callbacks.signingIn(), callbacks.sessionKnown())) return false
+    if (callbacks.usageFallbackUsed) return false
+    callbacks.usageFallbackUsed = true
+    android.util.Log.i("GrokUsage", "fallback grok.com/?_s=usage")
+    view.loadUrl(GrokLinks.USAGE)
     return true
 }
 

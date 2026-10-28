@@ -5,6 +5,7 @@ import ch.castellon.grok.usage.session.isGrokHost
 import ch.castellon.grok.usage.session.prefersXaiAccount
 import ch.castellon.grok.usage.session.holdsSignIn
 import ch.castellon.grok.usage.session.injectUsageScript
+import ch.castellon.grok.usage.session.shouldLeaveUnify
 import ch.castellon.grok.usage.session.isLoginReturnUrl
 import ch.castellon.grok.usage.session.isXaiAccountHome
 import ch.castellon.grok.usage.session.loginHandsOffToDashboard
@@ -179,6 +180,10 @@ class UsageLogicTest {
         assertFalse(prefersXaiAccount("https://accounts.x.ai/sign-in?redirect=grok"))
         assertTrue(isXaiAccountHome("https://accounts.x.ai/account"))
         assertFalse(isXaiAccountHome("https://accounts.x.ai/sign-in?redirect=grok"))
+        assertTrue(shouldLeaveUnify("https://accounts.x.ai/unify", signingIn = false, sessionKnown = true))
+        assertTrue(shouldLeaveUnify("https://grok.com/unify", signingIn = false, sessionKnown = false))
+        assertFalse(shouldLeaveUnify("https://accounts.x.ai/unify", signingIn = true, sessionKnown = false))
+        assertFalse(shouldLeaveUnify("https://accounts.x.ai/sign-in", signingIn = false, sessionKnown = true))
         assertFalse(injectUsageScript("accounts.google.com"))
         assertTrue(injectUsageScript("grok.com"))
         assertTrue(holdsSignIn("accounts.google.com"))

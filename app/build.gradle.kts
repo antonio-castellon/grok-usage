@@ -20,8 +20,8 @@ android {
         applicationId = "ch.castellon.grok.usage"
         minSdk = 28
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.0.6"
+        versionCode = 8
+        versionName = "1.0.7"
     }
 
     signingConfigs {
