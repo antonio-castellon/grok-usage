@@ -127,7 +127,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
         if (accountPageLeft) return
         if (!webTarget.startsWith("https://accounts.x.ai")) return
         accountPageLeft = true
-        webTarget = GrokLinks.DASHBOARD
+        webTarget = GrokLinks.USAGE
         loadToken++
     }
 
@@ -296,7 +296,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
             startSignIn()
             return
         }
-        webTarget = GrokLinks.DASHBOARD
+        webTarget = if (sessionKnown || snapshot != null) GrokLinks.USAGE else GrokLinks.DASHBOARD
         loadToken++
         if (snapshot == null) {
             readingUsage = true
