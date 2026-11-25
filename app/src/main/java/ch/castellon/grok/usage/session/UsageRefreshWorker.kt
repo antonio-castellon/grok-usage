@@ -12,6 +12,7 @@ import android.webkit.CookieManager
 import android.widget.FrameLayout
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import org.json.JSONObject
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import ch.castellon.grok.usage.BotMeter
@@ -106,6 +107,7 @@ class UsageRefreshWorker(context: Context, params: WorkerParameters) : Coroutine
 @SuppressLint("SetJavaScriptEnabled")
 private suspend fun readOnce(context: Context): Read? {
         val bot = CompletableDeferred<BotMeter?>()
+        val credits = CompletableDeferred<ParsedUsage?>()
         val loaded = CompletableDeferred<Unit>()
         val hostWindow = PageHost(context)
         val web = hostWindow.open()
@@ -124,12 +126,25 @@ private suspend fun readOnce(context: Context): Read? {
             web.onResume()
             web.resumeTimers()
             web.addJavascriptInterface(
-                BotRelay { payload ->
-                    when (val r = BotUsage.parse(payload)) {
-                        is BotRead.Meter -> if (!bot.isCompleted) bot.complete(r.meter)
-                        else -> Unit
-                    }
-                },
+                BotRelay(
+                    onResult = { payload ->
+                        when (val r = BotUsage.parse(payload)) {
+                            is BotRead.Meter -> if (!bot.isCompleted) bot.complete(r.meter)
+                            else -> Unit
+                        }
+                    },
+                    onCredits = { payload ->
+                        val json = runCatching { JSONObject(payload) }.getOrNull()
+                        if (json != null && json.optBoolean("ok", false)) {
+                            val parsedCredits = runCatching {
+                                UsageParser.parseCreditsJson(json.optString("body", ""))
+                            }.getOrNull()
+                            if (parsedCredits != null && !credits.isCompleted) {
+                                credits.complete(parsedCredits)
+                            }
+                        }
+                    },
+                ),
                 "GrokBotRelay",
             )
             web.webViewClient = object : WebViewClient() {
@@ -159,6 +174,7 @@ private suspend fun readOnce(context: Context): Read? {
                 return null
             }
             var parsed: ParsedUsage? = null
+            var creditsAsked = false
             var host = ""
             var len = 0
             for (attempt in 0 until 12) {
@@ -168,9 +184,20 @@ private suspend fun readOnce(context: Context): Read? {
                     return null
                 }
                 if (isGrokHost(host)) {
+                    if (!creditsAsked) {
+                        creditsAsked = true
+                        web.evaluateJavascript(CREDITS_ASK.replace("__GEN__", "1"), null)
+                    }
                     val text = decodeJsResult(web.eval(EXTRACT))
                     len = text.length
-                    parsed = runCatching { UsageParser.parse(text) }.getOrNull()
+                    val fromText = runCatching { UsageParser.parse(text) }.getOrNull()
+                    val fromCredits = if (credits.isCompleted) runCatching { credits.getCompleted() }.getOrNull() else null
+                    parsed = when {
+                        fromCredits != null && fromText != null -> fromCredits.mergeWith(fromText)
+                        fromCredits != null && attempt >= 2 -> fromCredits
+                        fromText != null -> fromText
+                        else -> null
+                    }
                     if (parsed != null) break
                 }
                 delay(1_500L)

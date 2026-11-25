@@ -110,12 +110,14 @@ fun AppRoot(vm: UsageViewModel = viewModel()) {
     callbacks.onPage = vm::notePage
     callbacks.onAccountShell = vm::onAccountShell
     callbacks.onNeedLogin = vm::onNeedLogin
+    callbacks.onLoginRequired = vm::onLoginRequired
     callbacks.onSessionConfirmed = vm::onSessionConfirmed
     callbacks.onUsageUnread = vm::onUsageUnread
     callbacks.sessionKnown = { vm.sessionKnown }
     callbacks.onAccountName = vm::onAccountName
     callbacks.onAccountPageRead = vm::leaveAccountPage
     callbacks.signingIn = { vm.phase == Phase.SigningIn }
+    callbacks.readingMode = { vm.phase == Phase.SigningIn || vm.phase == Phase.Ready }
 
     LaunchedEffect(Unit) {
         val intent = (context as? Activity)?.intent
@@ -137,19 +139,21 @@ fun AppRoot(vm: UsageViewModel = viewModel()) {
         clearWebSession(webRef.value)
         vm.abandonStuckSignIn()
     }
-    LaunchedEffect(vm.phase, vm.loadToken, vm.sessionKnown, vm.providerHold, vm.readingUsage) {
-        if (vm.phase != Phase.SigningIn || vm.sessionKnown) return@LaunchedEffect
-        if (vm.providerHold && !vm.readingUsage) return@LaunchedEffect
+    LaunchedEffect(vm.phase, vm.loadToken) {
+        if (vm.phase != Phase.SigningIn) return@LaunchedEffect
         delay(vm.signInWallRemainingMs())
-        if (vm.phase != Phase.SigningIn || vm.sessionKnown) return@LaunchedEffect
-        if (vm.providerHold && !vm.readingUsage) return@LaunchedEffect
-        clearWebSession(webRef.value)
-        vm.abandonStuckSignIn()
+        if (vm.phase != Phase.SigningIn) return@LaunchedEffect
+        if (vm.sessionKnown) {
+            vm.onUsageUnread()
+        } else {
+            clearWebSession(webRef.value)
+            vm.abandonStuckSignIn()
+        }
     }
     LaunchedEffect(vm.phase, vm.loadToken, vm.sessionKnown) {
         if (vm.phase != Phase.SigningIn || !vm.sessionKnown) return@LaunchedEffect
         delay(30_000)
-        if (vm.phase == Phase.SigningIn && vm.sessionKnown && !vm.providerHold) vm.onUsageUnread()
+        if (vm.phase == Phase.SigningIn && vm.sessionKnown) vm.onUsageUnread()
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
@@ -185,6 +189,7 @@ fun AppRoot(vm: UsageViewModel = viewModel()) {
     LaunchedEffect(vm.loadToken) {
         progress = 0
         callbacks.dashboardHandoffUsed = false
+        callbacks.usageFallbackUsed = false
     }
 
     val interactive = showSignInWeb(vm.phase, vm.readingUsage, vm.sessionKnown, vm.providerHold) || vm.phase == Phase.Official
@@ -284,7 +289,7 @@ fun AppRoot(vm: UsageViewModel = viewModel()) {
                         onExitDemo = vm::exitDemo,
                         onRefresh = { if (!vm.demo) vm.refresh() },
                         onCardsVisible = { cardsVisible = it },
-                        onOpenGrok = { openGrokUsage(context) },
+                        onOpenGrok = { vm.openOfficial(GrokLinks.USAGE) },
                         onSignInAgain = vm::startSignIn,
                         allowSignInAgain = showSignInActions(vm.sessionKnown),
                         notifyEnabled = vm.notifyEnabled,
@@ -310,9 +315,10 @@ fun AppRoot(vm: UsageViewModel = viewModel()) {
                 Surface(modifier = Modifier.fillMaxSize(), color = Bg) {
                     SignedInHome(
                         reading = vm.phase == Phase.SigningIn && vm.readingUsage,
+                        status = vm.status,
                         accountLabel = vm.accountLabel,
                         onRefresh = vm::refresh,
-                        onOpenGrok = { openGrokUsage(context) },
+                        onOpenGrok = { vm.openOfficial(GrokLinks.USAGE) },
                         onSignOut = {
                             CookieManager.getInstance().removeAllCookies {
                                 CookieManager.getInstance().flush()
@@ -331,12 +337,13 @@ fun AppRoot(vm: UsageViewModel = viewModel()) {
                     SignInScreen(
                         onSignIn = vm::startSignIn,
                         onDemo = vm::startDemo,
-                        onOpenOfficial = { openExternal(context, GrokLinks.DASHBOARD) },
+                        onOpenOfficial = { openExternal(context, GrokLinks.USAGE) },
                         onPrivacy = { privacyOpen = true },
-                        notice = if (vm.status == StatusKind.SignInTimedOut) {
-                            stringResource(R.string.status_sign_in_timeout)
-                        } else {
-                            null
+                        notice = when (vm.status) {
+                            StatusKind.SignInTimedOut -> stringResource(R.string.status_sign_in_timeout)
+                            StatusKind.RefreshFailed -> stringResource(R.string.status_refresh_failed)
+                            StatusKind.NeedUsagePage -> stringResource(R.string.status_need_page)
+                            else -> null
                         },
                     )
                 }

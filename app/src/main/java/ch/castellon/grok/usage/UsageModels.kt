@@ -11,7 +11,21 @@ data class ParsedUsage(
     val segments: List<UsageSegment>,
     val botPercent: Float?,
     val botResetRaw: String?,
-)
+) {
+    /** Combines a structured parse and a text/bot parse without dropping fields from either. */
+    fun mergeWith(fallback: ParsedUsage?): ParsedUsage {
+        if (fallback == null) return this
+        val useOverall = overallPercent != null
+        val useBot = botPercent != null
+        return ParsedUsage(
+            overallPercent = overallPercent ?: fallback.overallPercent,
+            overallResetRaw = if (useOverall) overallResetRaw ?: fallback.overallResetRaw else fallback.overallResetRaw ?: overallResetRaw,
+            segments = if (segments.isNotEmpty()) segments else fallback.segments,
+            botPercent = botPercent ?: fallback.botPercent,
+            botResetRaw = if (useBot) botResetRaw ?: fallback.botResetRaw else fallback.botResetRaw ?: botResetRaw,
+        )
+    }
+}
 
 data class UsageSnapshot(
     val overallPercent: Float?,
@@ -29,6 +43,16 @@ data class UsageSnapshot(
             segments = parsed.segments,
             botPercent = parsed.botPercent ?: bot?.percent,
             botResetRaw = if (parsed.botPercent != null) parsed.botResetRaw else bot?.resetRaw ?: parsed.botResetRaw,
+            updatedAtEpochMs = nowEpochMs,
+        )
+
+        /** Partial snapshot when only the Grok Bot meter is available. */
+        fun partialBot(bot: BotMeter, nowEpochMs: Long) = UsageSnapshot(
+            overallPercent = null,
+            overallResetRaw = null,
+            segments = emptyList(),
+            botPercent = bot.percent,
+            botResetRaw = bot.resetRaw,
             updatedAtEpochMs = nowEpochMs,
         )
     }

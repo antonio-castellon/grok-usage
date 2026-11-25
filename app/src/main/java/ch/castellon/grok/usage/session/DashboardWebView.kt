@@ -16,22 +16,24 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.webkit.WebSettingsCompat
-import androidx.webkit.WebViewFeature
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 import ch.castellon.grok.usage.BotMeter
 import ch.castellon.grok.usage.BotRead
 import ch.castellon.grok.usage.BotUsage
 import ch.castellon.grok.usage.GrokLinks
 import ch.castellon.grok.usage.ParsedUsage
 import ch.castellon.grok.usage.UsageParser
+import ch.castellon.grok.usage.UsageRefresh
 import ch.castellon.grok.usage.decodeJsResult
 import ch.castellon.grok.usage.formatPercent
+import org.json.JSONObject
 
 class WebCallbacks {
     var onParsed: (ParsedUsage) -> Unit = {}
@@ -39,9 +41,11 @@ class WebCallbacks {
     var onProgress: (Int) -> Unit = {}
     var onPage: (String?) -> Unit = {}
     var signingIn: () -> Boolean = { false }
+    var readingMode: () -> Boolean = { false }
     var dashboardHandoffUsed: Boolean = false
     var onAccountShell: () -> Unit = {}
     var onNeedLogin: () -> Unit = {}
+    var onLoginRequired: () -> Unit = {}
     var onSessionConfirmed: () -> Unit = {}
     var onUsageUnread: () -> Unit = {}
     var sessionKnown: () -> Boolean = { false }
@@ -162,7 +166,7 @@ private const val SESSION_PROBE = """
   try {
     var t = ((document.body && document.body.innerText) || '').slice(0, 6000).toLowerCase();
     if (t.length < 40) return 'wait';
-    if (/\d+\s*%\s*used/.test(t) || t.indexOf('weekly grok bot') >= 0) return 'usage';
+    if (/\d+(?:[.,]\d+)?\s*%\s*(used|of total)/.test(t) || t.indexOf('weekly grok bot') >= 0 || document.querySelector('[role="progressbar"]')) return 'usage';
     if (t.indexOf('sign-in methods') >= 0 || t.indexOf('account created') >= 0 || t.indexOf('sign out') >= 0) return 'account';
     return 'login';
   } catch (e) { return 'login'; }
@@ -177,6 +181,28 @@ internal const val EXTRACT = """
     return t;
   } catch (e) { return ''; }
 })()
+"""
+
+internal const val CREDITS_ASK = """
+(function(){
+  try {
+    fetch('/rest/grok/credits', {
+      credentials: 'include',
+      headers: { 'Accept': 'application/json' }
+    }).then(function(r) {
+      if (!r.ok) return JSON.stringify({gen:__GEN__, ok:false, status:r.status});
+      return r.text().then(function(t) {
+        return JSON.stringify({gen:__GEN__, ok:true, body:t});
+      });
+    }).catch(function() {
+      return JSON.stringify({gen:__GEN__, ok:false, status:0});
+    }).then(function(s) {
+      try { GrokBotRelay.credits(s); } catch (e) {}
+    });
+  } catch (e) {
+    try { GrokBotRelay.credits(JSON.stringify({gen:__GEN__, ok:false, status:0})); } catch (e2) {}
+  }
+})();
 """
 
 internal const val BOT_ASK = """
@@ -326,9 +352,6 @@ fun DashboardWebView(
     )
 }
 
-// The official usage page is a website, so JavaScript stays on.
-// Weekly numbers come from that page's text. The bot meter is the same
-// reading the usage page loads for this session when the card is not in the text.
 @SuppressLint("SetJavaScriptEnabled")
 private fun buildWebView(context: Context, callbacks: WebCallbacks): WebView {
     val client = UsageWebClient(callbacks)
@@ -369,9 +392,14 @@ private fun buildWebView(context: Context, callbacks: WebCallbacks): WebView {
         cookies.setAcceptCookie(true)
         cookies.setAcceptThirdPartyCookies(this, true)
         addJavascriptInterface(
-            BotRelay { payload ->
-                post { client.onBotPayload(this, payload) }
-            },
+            BotRelay(
+                onResult = { payload ->
+                    post { client.onBotPayload(this, payload) }
+                },
+                onCredits = { payload ->
+                    post { client.onCreditsPayload(this, payload) }
+                },
+            ),
             "GrokBotRelay",
         )
         webChromeClient = object : WebChromeClient() {
@@ -410,7 +438,8 @@ private fun buildWebView(context: Context, callbacks: WebCallbacks): WebView {
                             return true
                         }
                         if (isLoginReturnUrl(next)) {
-                            view.loadUrl(next)
+                            val target = if (next.contains("code=") || pathOf(next).contains("callback")) next else GrokLinks.USAGE
+                            view.loadUrl(target)
                             detachPopup(childView)
                             return true
                         }
@@ -420,7 +449,8 @@ private fun buildWebView(context: Context, callbacks: WebCallbacks): WebView {
                     override fun onPageFinished(childView: WebView, url: String?) {
                         callbacks.onPage(url)
                         if (url != null && isLoginReturnUrl(url)) {
-                            view.loadUrl(url)
+                            val target = if (url.contains("code=") || pathOf(url).contains("callback")) url else GrokLinks.USAGE
+                            view.loadUrl(target)
                             detachPopup(childView)
                         }
                     }
@@ -453,10 +483,16 @@ private fun buildWebView(context: Context, callbacks: WebCallbacks): WebView {
 
 class BotRelay(
     private val onResult: (String) -> Unit,
+    private val onCredits: (String) -> Unit = {},
 ) {
     @JavascriptInterface
     fun result(payload: String?) {
         onResult(payload?.take(240).orEmpty())
+    }
+
+    @JavascriptInterface
+    fun credits(payload: String?) {
+        onCredits(payload?.take(64_000).orEmpty())
     }
 }
 
@@ -468,12 +504,71 @@ private class UsageWebClient(
     private var botBusy = false
     private var botTries = 0
     private var botGot = false
+    private var creditsBusy = false
+    private var creditsTries = 0
+    private var creditsGot = false
+    private var creditsUnauthorized = false
+    private var pageParsed: ParsedUsage? = null
+    private var lastPolledUrl: String? = null
+    private var spaPollToken = 0
 
     override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
         botGen++
         botBusy = false
         botTries = 0
         botGot = false
+        creditsBusy = false
+        creditsTries = 0
+        creditsGot = false
+        creditsUnauthorized = false
+        pageParsed = null
+        lastPolledUrl = url
+        spaPollToken++
+    }
+
+    fun onCreditsPayload(view: WebView, payload: String) {
+        val json = runCatching { JSONObject(payload) }.getOrNull() ?: return
+        val gen = json.optInt("gen", -1)
+        if (gen >= 0 && gen != botGen) return
+        creditsBusy = false
+        val host = view.url?.let { hostOf(it) }.orEmpty()
+        if (!isGrokHost(host)) return
+        if (json.optBoolean("ok", false)) {
+            val body = json.optString("body", "")
+            val parsed = runCatching { UsageParser.parseCreditsJson(body) }.getOrNull()
+            if (parsed != null) {
+                creditsGot = true
+                creditsUnauthorized = false
+                val merged = parsed.mergeWith(pageParsed)
+                pageParsed = merged
+                android.util.Log.i(
+                    "GrokUsage",
+                    "credits api ok pct=${merged.overallPercent?.let(::formatPercent)} segs=${merged.segments.size}",
+                )
+                callbacks.onParsed(merged)
+                if (merged.botPercent == null) requestBot(view)
+                return
+            }
+        }
+        val status = json.optInt("status", 0)
+        if (status == 401 || status == 403) {
+            creditsUnauthorized = true
+            android.util.Log.i("GrokUsage", "credits api auth=$status")
+            return
+        }
+        android.util.Log.i("GrokUsage", "credits api miss status=$status")
+        if (!creditsGot && creditsTries < 2) {
+            view.postDelayed({ requestCredits(view) }, 1200L)
+        }
+    }
+
+    private fun requestCredits(view: WebView) {
+        if (creditsGot || creditsBusy || creditsTries >= 2) return
+        val host = view.url?.let { hostOf(it) }.orEmpty()
+        if (!isGrokHost(host)) return
+        creditsTries += 1
+        creditsBusy = true
+        view.evaluateJavascript(CREDITS_ASK.replace("__GEN__", botGen.toString()), null)
     }
 
     fun onBotPayload(view: WebView, payload: String) {
@@ -522,11 +617,19 @@ private class UsageWebClient(
         return consumeNavigation(view, request.url)
     }
 
+    override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+        super.doUpdateVisitedHistory(view, url, isReload)
+        if (isReload || url.isNullOrBlank() || url == lastPolledUrl) return
+        lastPolledUrl = url
+        onSpaRouteChanged(view, url)
+    }
+
     override fun onPageFinished(view: WebView, url: String?) {
         android.util.Log.i(
             "GrokUsage",
             "finished " + (url?.let { (hostOf(it) ?: "none") + pathOf(it) } ?: "none"),
         )
+        lastPolledUrl = url
         callbacks.onPage(url)
         val host = url?.let { hostOf(it) }.orEmpty()
         CookieManager.getInstance().flush()
@@ -534,32 +637,113 @@ private class UsageWebClient(
         if (!injectUsageScript(host)) return
         if (host == "accounts.x.ai" || host == "accounts.spacex.ai") {
             view.postDelayed({
-                val now = view.url?.let { hostOf(it) }.orEmpty()
+                val currentUrl = view.url
+                val now = currentUrl?.let { hostOf(it) }.orEmpty()
                 if (now != "accounts.x.ai" && now != "accounts.spacex.ai") {
-                    callbacks.onAccountPageRead()
+                    if (!callbacks.signingIn() && !isGrokHost(now)) callbacks.onAccountPageRead()
                     return@postDelayed
                 }
-                view.evaluateJavascript(ACCOUNT_NAME) { raw ->
-                    val name = decodeJsResult(raw).trim()
-                    if (name.contains('@')) callbacks.onAccountName(name)
-                    callbacks.onAccountPageRead()
+                if (callbacks.signingIn() && isXaiAccountHome(currentUrl.orEmpty())) {
+                    leaveForUsage(callbacks, view, currentUrl.orEmpty(), signingIn = true)
+                    return@postDelayed
                 }
-            }, 2000)
+                if (!callbacks.signingIn()) {
+                    view.evaluateJavascript(ACCOUNT_NAME) { raw ->
+                        val name = decodeJsResult(raw).trim()
+                        if (name.contains('@')) callbacks.onAccountName(name)
+                        callbacks.onAccountPageRead()
+                    }
+                }
+            }, 1500)
         }
         if (url != null && leaveForUsage(callbacks, view, url, callbacks.signingIn())) return
         if (callbacks.signingIn()) probeSession(view, url)
         if (url != null && callbacks.signingIn() && loginHandsOffToDashboard(url)) {
-            handOffToDashboard(view, url)
+            handOffToUsage(view, url)
+            return
+        }
+        if (url != null && shouldJumpToUsageQuery(url)) {
+            callbacks.usageFallbackUsed = true
+            android.util.Log.i("GrokUsage", "jump grok.com/?_s=usage")
+            view.loadUrl(GrokLinks.USAGE)
             return
         }
         view.post { reflow(view) }
         view.postDelayed({ reflow(view) }, 350)
         view.postDelayed({ reflow(view) }, 900)
-        startRead(view)
-        requestBot(view)
+        startSpaPoll(view)
+        if (isGrokHost(host)) {
+            requestCredits(view)
+            startRead(view)
+            requestBot(view)
+        }
     }
 
-    private fun handOffToDashboard(view: WebView, fromUrl: String) {
+    private fun shouldJumpToUsageQuery(url: String): Boolean {
+        val host = hostOf(url) ?: return false
+        if (!isGrokHost(host)) return false
+        if (!callbacks.readingMode() || callbacks.usageFallbackUsed) return false
+        if (url.contains("_s=usage")) return false
+        val path = pathOf(url)
+        if (path.contains("/api/") || url.contains("code=")) return false
+        return callbacks.sessionKnown() || UsageRefresh.hasStoredSession()
+    }
+
+    private fun startSpaPoll(view: WebView) {
+        if (!callbacks.signingIn() && !callbacks.readingMode()) return
+        val token = ++spaPollToken
+        pollSpaLocation(view, token, 0)
+    }
+
+    private fun pollSpaLocation(view: WebView, token: Int, step: Int) {
+        if (token != spaPollToken || step >= 120) return
+        if (!callbacks.signingIn() && !callbacks.readingMode()) return
+        view.postDelayed({
+            if (token != spaPollToken || !view.isAttachedToWindow) return@postDelayed
+            val host = view.url?.let { hostOf(it) }.orEmpty()
+            if (!injectUsageScript(host)) {
+                pollSpaLocation(view, token, step + 1)
+                return@postDelayed
+            }
+            view.evaluateJavascript("window.location.href") { raw ->
+                if (token != spaPollToken) return@evaluateJavascript
+                val current = decodeJsResult(raw).trim()
+                if (current.startsWith("http") && current != lastPolledUrl) {
+                    lastPolledUrl = current
+                    onSpaRouteChanged(view, current)
+                }
+                pollSpaLocation(view, token, step + 1)
+            }
+        }, 750L)
+    }
+
+    private fun onSpaRouteChanged(view: WebView, url: String) {
+        val host = hostOf(url).orEmpty()
+        android.util.Log.i("GrokUsage", "spa " + (host.ifEmpty { "none" }) + pathOf(url))
+        callbacks.onPage(url)
+        CookieManager.getInstance().flush()
+        if (leaveUnify(callbacks, view, url)) return
+        if (leaveForUsage(callbacks, view, url, callbacks.signingIn())) return
+        if (callbacks.signingIn() && loginHandsOffToDashboard(url)) {
+            handOffToUsage(view, url)
+            return
+        }
+        if (shouldJumpToUsageQuery(url)) {
+            callbacks.usageFallbackUsed = true
+            android.util.Log.i("GrokUsage", "spa jump grok.com/?_s=usage")
+            view.loadUrl(GrokLinks.USAGE)
+            return
+        }
+        if (!injectUsageScript(host)) return
+        if (callbacks.signingIn()) probeSession(view, url)
+        if (isGrokHost(host)) {
+            requestCredits(view)
+            startRead(view)
+            requestBot(view)
+        }
+    }
+
+    private fun handOffToUsage(view: WebView, fromUrl: String) {
         if (callbacks.dashboardHandoffUsed) return
         callbacks.dashboardHandoffUsed = true
         view.postDelayed({
@@ -567,7 +751,7 @@ private class UsageWebClient(
             if (current.substringBefore('#') != fromUrl.substringBefore('#') && !loginHandsOffToDashboard(current)) {
                 return@postDelayed
             }
-            view.loadUrl(GrokLinks.DASHBOARD)
+            view.loadUrl(GrokLinks.USAGE)
         }, 900)
     }
 
@@ -581,9 +765,23 @@ private class UsageWebClient(
                 return@evaluateJavascript
             }
             if (kind == "usage") return@evaluateJavascript
-            if (kind == "account") callbacks.onSessionConfirmed()
-            if (callbacks.sessionKnown()) return@evaluateJavascript
-            val foreign = url != null && (prefersXaiAccount(url) || kind == "account" || isXaiAccountHome(url))
+            if (kind == "account") {
+                callbacks.onSessionConfirmed()
+                callbacks.onAccountShell()
+                if (!callbacks.dashboardHandoffUsed) {
+                    callbacks.dashboardHandoffUsed = true
+                    view.loadUrl(GrokLinks.USAGE)
+                }
+                return@evaluateJavascript
+            }
+            if (callbacks.sessionKnown()) {
+                val host = url?.let { hostOf(it) }.orEmpty()
+                if (kind == "login" && (holdsSignIn(host) || creditsUnauthorized)) {
+                    callbacks.onLoginRequired()
+                }
+                return@evaluateJavascript
+            }
+            val foreign = url != null && (prefersXaiAccount(url) || isXaiAccountHome(url))
             if (foreign) {
                 callbacks.onAccountShell()
                 if (!callbacks.dashboardHandoffUsed) {
@@ -624,41 +822,55 @@ private class UsageWebClient(
         if (id != chain) return
         try {
             view.evaluateJavascript(EXTRACT) { raw ->
-            if (id != chain) return@evaluateJavascript
-            val text = decodeJsResult(raw)
-            val parsed = runCatching { UsageParser.parse(text) }.getOrNull()
-            val host = view.url?.let { hostOf(it) }.orEmpty()
-            val path = view.url?.let { pathOf(it) }.orEmpty()
-            val grok = Regex("(?i)supergrok|grok\\s+build|weekly\\s+grok\\s+bot").containsMatchIn(text)
-            val pct = Regex("(?i)\\d+(?:\\.\\d+)?\\s*%\\s*used").containsMatchIn(text)
-            val botWord = Regex("(?i)grok\\s+bot").containsMatchIn(text)
-            val retryLimit = if (callbacks.sessionKnown()) 12 else 5
-            if (attempt == 0 || parsed != null || attempt >= retryLimit) {
-                android.util.Log.i(
-                    "GrokUsage",
-                    "read $host$path len=${text.length} pct=$pct grok=$grok bot=$botWord parsed=${parsed != null} try=$attempt",
-                )
-            }
-            if (parsed != null) {
-                callbacks.onParsed(parsed)
-                if (parsed.botPercent == null) requestBot(view)
-            } else if (
-                attempt >= 2 &&
-                callbacks.sessionKnown() &&
-                !callbacks.usageFallbackUsed &&
-                (host.endsWith("cursor.com") || host.endsWith("cursor.sh") || path.contains("/unify"))
-            ) {
-                callbacks.usageFallbackUsed = true
-                android.util.Log.i("GrokUsage", "fallback grok.com/?_s=usage")
-                view.loadUrl("https://grok.com/?_s=usage")
-            } else if (attempt < retryLimit) {
-                view.postDelayed({ read(view, id, attempt + 1) }, delayFor(attempt))
-            } else {
+                if (id != chain) return@evaluateJavascript
+                val text = decodeJsResult(raw)
+                val parsed = runCatching { UsageParser.parse(text) }.getOrNull()
+                val host = view.url?.let { hostOf(it) }.orEmpty()
+                val path = view.url?.let { pathOf(it) }.orEmpty()
+                val grok = Regex("(?i)supergrok|grok\\s+build|weekly\\s+grok\\s+bot").containsMatchIn(text)
+                val pct = Regex("(?i)\\d+(?:[.,]\\d+)?\\s*%").containsMatchIn(text)
+                val botWord = Regex("(?i)grok\\s+bot").containsMatchIn(text)
+                val retryLimit = if (callbacks.sessionKnown()) 12 else 5
+                if (attempt == 0 || parsed != null || attempt >= retryLimit) {
+                    android.util.Log.i(
+                        "GrokUsage",
+                        "read $host$path len=${text.length} pct=$pct grok=$grok bot=$botWord credits=$creditsGot parsed=${parsed != null} try=$attempt",
+                    )
+                }
+                if (parsed != null) {
+                    val existing = pageParsed
+                    val merged = if (creditsGot && existing != null) {
+                        existing.mergeWith(parsed)
+                    } else {
+                        parsed.mergeWith(existing)
+                    }
+                    pageParsed = merged
+                    callbacks.onParsed(merged)
+                    if (merged.botPercent == null) requestBot(view)
+                } else if (creditsGot && pageParsed != null && attempt >= 3) {
+                    if (pageParsed?.botPercent == null) requestBot(view)
+                } else if (
+                    attempt >= 2 &&
+                    callbacks.sessionKnown() &&
+                    !callbacks.usageFallbackUsed &&
+                    (host.endsWith("cursor.com") || host.endsWith("cursor.sh") || path.contains("/unify"))
+                ) {
+                    callbacks.usageFallbackUsed = true
+                    android.util.Log.i("GrokUsage", "fallback grok.com/?_s=usage")
+                    view.loadUrl(GrokLinks.USAGE)
+                } else if (creditsUnauthorized && !botGot && attempt >= 2 && callbacks.signingIn()) {
+                    callbacks.onLoginRequired()
+                    if (attempt < retryLimit) {
+                        view.postDelayed({ read(view, id, attempt + 1) }, delayFor(attempt))
+                    }
+                } else if (attempt < retryLimit) {
+                    view.postDelayed({ read(view, id, attempt + 1) }, delayFor(attempt))
+                } else if (!creditsGot) {
                     callbacks.onGiveUp()
                 }
             }
         } catch (_: Throwable) {
-            if (id == chain) callbacks.onGiveUp()
+            if (id == chain && !creditsGot) callbacks.onGiveUp()
         }
     }
 
@@ -780,14 +992,13 @@ private fun leaveForUsage(callbacks: WebCallbacks, view: WebView, url: String, s
     if (!signingIn || (!prefersXaiAccount(url) && !isXaiAccountHome(url))) return false
     if (isXaiAccountHome(url)) callbacks.onSessionConfirmed()
     callbacks.onAccountShell()
-    if (callbacks.sessionKnown()) return false
     if (!callbacks.dashboardHandoffUsed) {
         callbacks.dashboardHandoffUsed = true
         view.loadUrl(GrokLinks.USAGE)
-    } else {
-        callbacks.onNeedLogin()
+        return true
     }
-    return true
+    if (!callbacks.sessionKnown()) callbacks.onNeedLogin()
+    return false
 }
 
 internal fun isGrokHost(host: String): Boolean {
