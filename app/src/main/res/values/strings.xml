@@ -29,7 +29,7 @@
     <string name="signed_in_unread">Signed in. The official usage page did not return numbers yet.</string>
     <string name="refresh">Refresh</string>
     <string name="status_refresh_failed">Could not refresh. Showing the last saved usage.</string>
-    <string name="status_need_page">Open Usage on the page below. The bars fill in from that page.</string>
+    <string name="status_need_page">Could not read Usage from Grok yet. Tap Refresh or Open Usage in Grok.</string>
     <string name="status_sign_in_timeout">Sign-in waited too long, so that check was cancelled.</string>
     <string name="sign_in_again">Sign in again</string>
     <string name="demo_try">Try demo (sample data)</string>

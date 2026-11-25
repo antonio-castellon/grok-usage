@@ -21,6 +21,12 @@ fun segmentColor(label: String): Color = when (label) {
     "Imagine" -> Color(0xFFC084FC)
     "Voice" -> Color(0xFF34D399)
     "API" -> Color(0xFFFB7185)
+    "Grok Bot" -> Color(0xFF3B82F6)
+    "Cursor" -> Color(0xFF22D3EE)
+    "Bugbot" -> Color(0xFFF472B6)
+    "App Builder" -> Color(0xFFA78BFA)
+    "Plugins" -> Color(0xFF4ADE80)
+    "Tasks" -> Color(0xFFFBBF24)
     else -> Color(0xFFA1A1AA)
 }
 
