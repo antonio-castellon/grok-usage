@@ -1,43 +1,54 @@
 package ch.castellon.grok.usage.ui
 
 import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProvider
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.widget.Toast
-import android.appwidget.AppWidgetProvider
 import ch.castellon.grok.usage.ClockWidget
+import ch.castellon.grok.usage.GrokLinks
 import ch.castellon.grok.usage.R
 import ch.castellon.grok.usage.UsageWidget
 
 fun openExternal(context: Context, url: String) {
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+    val uri = Uri.parse(url)
+    val browserPkg = findBrowserPackage(context)
+    val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+        addCategory(Intent.CATEGORY_BROWSABLE)
+        if (browserPkg != null) setPackage(browserPkg)
+    }
     try {
         context.startActivity(intent)
+        return
     } catch (_: ActivityNotFoundException) {
-        // The phone has no app that can open https links.
+        if (browserPkg != null) {
+            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+        }
     }
 }
 
 fun openGrokUsage(context: Context) {
-    val usage = Intent(Intent.ACTION_VIEW, Uri.parse("xai-grok://usage")).apply {
-        setPackage("ai.x.grok")
+    openExternal(context, GrokLinks.USAGE)
+}
+
+private fun findBrowserPackage(context: Context): String? {
+    val probe = Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"))
+        .addCategory(Intent.CATEGORY_BROWSABLE)
+    val pm = context.packageManager
+    val resolved = if (Build.VERSION.SDK_INT >= 33) {
+        pm.queryIntentActivities(probe, PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong()))
+    } else {
+        @Suppress("DEPRECATION")
+        pm.queryIntentActivities(probe, PackageManager.MATCH_DEFAULT_ONLY)
     }
-    try {
-        context.startActivity(usage)
-        return
-    } catch (_: ActivityNotFoundException) {
-        // The installed Grok app did not accept the Usage link.
-    }
-    val launch = context.packageManager.getLaunchIntentForPackage("ai.x.grok")
-    if (launch != null) {
-        context.startActivity(launch)
-        return
-    }
-    openExternal(context, "https://grok.com/")
+    return resolved
+        .mapNotNull { it.activityInfo?.packageName }
+        .firstOrNull { pkg -> pkg != "ai.x.grok" && pkg != context.packageName }
 }
 
 fun pinUsageWidget(context: Context) {

@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ch.castellon.grok.usage.R
+import ch.castellon.grok.usage.StatusKind
 
 @Composable
 fun SignInScreen(
@@ -111,6 +112,7 @@ fun SignInScreen(
 @Composable
 fun SignedInHome(
     reading: Boolean,
+    status: StatusKind = StatusKind.Empty,
     accountLabel: String?,
     onRefresh: () -> Unit,
     onOpenGrok: () -> Unit,
@@ -154,6 +156,25 @@ fun SignedInHome(
                 fontSize = 16.sp,
                 lineHeight = 22.sp,
             )
+            val statusNotice = if (reading) {
+                null
+            } else {
+                when (status) {
+                    StatusKind.NeedUsagePage -> stringResource(R.string.status_need_page)
+                    StatusKind.RefreshFailed -> stringResource(R.string.status_refresh_failed)
+                    StatusKind.SignInTimedOut -> stringResource(R.string.status_sign_in_timeout)
+                    else -> null
+                }
+            }
+            if (statusNotice != null) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = statusNotice,
+                    color = Warning,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                )
+            }
             if (!reading) {
                 Spacer(Modifier.height(28.dp))
                 Button(
