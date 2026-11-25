@@ -13,11 +13,58 @@ enum class StatusKind { Empty, Updated, Saved, RefreshFailed, NeedUsagePage, Sig
 
 internal const val SIGN_IN_WAIT_MS = 180_000L
 
+private val ignoredSessionCookies = setOf(
+    "gb_anon_id",
+    "grok_device_id",
+    "device_id",
+    "anon_id",
+    "__cf_bm",
+    "__cflb",
+    "_cfuvid",
+    "cf_clearance",
+    "i18next",
+    "next_locale",
+    "theme",
+    "_ga",
+    "_gid",
+)
+
+private val knownAuthCookies = setOf(
+    "sso",
+    "sso-rw",
+    "x-userid",
+    "wos-session",
+    "session",
+    "__session",
+    "auth_token",
+    "next-auth.session-token",
+    "__secure-next-auth.session-token",
+)
+
 internal fun cookieLooksSignedIn(header: String?): Boolean {
     if (header.isNullOrBlank()) return false
     return header.split(';').any { part ->
-        val name = part.substringBefore('=').trim().lowercase()
-        name.isNotEmpty() && name != "__cf_bm" && name != "_cfuvid" && !name.startsWith("__cf")
+        val eq = part.indexOf('=')
+        if (eq <= 0) return@any false
+        val name = part.substring(0, eq).trim().lowercase()
+        val value = part.substring(eq + 1).trim()
+        if (name.isEmpty() || value.isEmpty()) return@any false
+        if (name in ignoredSessionCookies ||
+            name.startsWith("__cf") ||
+            name.startsWith("_cf") ||
+            name.startsWith("cf_") ||
+            name.startsWith("_ga") ||
+            name.contains("anon") ||
+            name.contains("device") ||
+            name.contains("guest")
+        ) {
+            return@any false
+        }
+        name in knownAuthCookies ||
+            name.contains("session") ||
+            name.contains("auth") ||
+            name == "sso" ||
+            name.startsWith("sso-")
     }
 }
 
@@ -68,7 +115,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var status by mutableStateOf(if (snapshot == null) StatusKind.Empty else StatusKind.Saved)
         private set
-    var webTarget by mutableStateOf(GrokLinks.DASHBOARD)
+    var webTarget by mutableStateOf(GrokLinks.USAGE)
         private set
     var loadToken by mutableIntStateOf(0)
         private set
@@ -124,8 +171,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun leaveAccountPage() {
-        if (accountPageLeft) return
-        if (!webTarget.startsWith("https://accounts.x.ai")) return
+        if (accountPageLeft || phase == Phase.Official || phase == Phase.SignedOut || demo) return
         accountPageLeft = true
         webTarget = GrokLinks.USAGE
         loadToken++
@@ -179,17 +225,11 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
 
     fun resumeSignIn(fromSession: Boolean) {
         if (fromSession) sessionKnown = true
-        if (fromSession && accountLabel == null && !accountPageLeft) {
+        if (fromSession && snapshot != null && accountLabel == null && !accountPageLeft) {
             webTarget = GrokLinks.ACCOUNT
             loadToken++
-            if (snapshot != null) {
-                readingUsage = false
-                phase = Phase.Ready
-            } else if (phase != Phase.SigningIn) {
-                leaveDemo()
-                readingUsage = true
-                phase = Phase.SigningIn
-            }
+            readingUsage = false
+            phase = Phase.Ready
             return
         }
         if (snapshot != null && sessionKnown) {
@@ -205,18 +245,27 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
         val now = System.currentTimeMillis()
         store.markSignInStarted(now)
         store.markSignInWall(now)
-        readingUsage = true
-        webTarget = GrokLinks.DASHBOARD
+        readingUsage = fromSession
+        webTarget = if (fromSession) GrokLinks.USAGE else GrokLinks.SIGN_IN
+        loadToken++
         phase = Phase.SigningIn
     }
 
     fun startSignIn() {
         leaveDemo()
-        readingUsage = true
+        val hasSession = hasStoredSession()
+        sessionKnown = false
+        accountPageLeft = false
+        providerHold = false
+        providerSince = 0L
+        signInPaused = false
+        leftDuringSignIn = false
+        pendingBot = null
+        readingUsage = hasSession
         val now = System.currentTimeMillis()
         store.markSignInStarted(now)
         store.markSignInWall(now)
-        webTarget = GrokLinks.DASHBOARD
+        webTarget = if (hasSession) GrokLinks.USAGE else GrokLinks.SIGN_IN
         loadToken++
         refreshing = false
         status = StatusKind.Empty
@@ -226,7 +275,6 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
     fun hasUnfinishedSignIn(): Boolean = store.signInStartedAt() > 0L
 
     fun hasStoredSession(): Boolean = UsageRefresh.hasStoredSession()
-
 
     fun signInRemainingMs(nowEpochMs: Long = System.currentTimeMillis()): Long {
         val started = store.signInStartedAt()
@@ -240,8 +288,10 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
 
     fun abandonStuckSignIn() {
         store.clearSignInStarted()
+        sessionKnown = false
+        readingUsage = false
         refreshing = false
-        webTarget = GrokLinks.DASHBOARD
+        webTarget = GrokLinks.USAGE
         loadToken++
         status = StatusKind.SignInTimedOut
         phase = if (snapshot == null) Phase.SignedOut else Phase.Ready
@@ -259,7 +309,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
         store.clearSignInStarted()
         readingUsage = false
         refreshing = false
-        phase = if (snapshot == null) Phase.SignedOut else Phase.Ready
+        phase = if (snapshot == null && !sessionKnown) Phase.SignedOut else Phase.Ready
     }
 
     fun onAccountShell() = Unit
@@ -271,6 +321,13 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onNeedLogin() {
         if (phase != Phase.SigningIn || sessionKnown) return
+        readingUsage = false
+    }
+
+    /** Server or login screen rejected the assumed session; drop back to interactive sign-in. */
+    fun onLoginRequired() {
+        if (phase != Phase.SigningIn || snapshot != null) return
+        sessionKnown = false
         readingUsage = false
     }
 
@@ -296,9 +353,12 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
             startSignIn()
             return
         }
-        webTarget = if (sessionKnown || snapshot != null) GrokLinks.USAGE else GrokLinks.DASHBOARD
+        webTarget = GrokLinks.USAGE
         loadToken++
         if (snapshot == null) {
+            val now = System.currentTimeMillis()
+            store.markSignInStarted(now)
+            store.markSignInWall(now)
             readingUsage = true
             refreshing = false
             phase = Phase.SigningIn
@@ -310,16 +370,37 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
     fun onBotMeter(meter: BotMeter) {
         if (demo) return
         pendingBot = meter
-        val current = snapshot ?: return
+        val now = System.currentTimeMillis()
+        val current = snapshot
+        if (current == null) {
+            val partial = UsageSnapshot.partialBot(meter, now)
+            snapshot = partial
+            store.save(partial)
+            store.clearSignInStarted()
+            sessionKnown = true
+            val wasSigningIn = phase == Phase.SigningIn
+            readingUsage = false
+            if (wasSigningIn || phase == Phase.SignedOut) {
+                refreshing = wasSigningIn
+                phase = Phase.Ready
+            }
+            status = StatusKind.Updated
+            publishSnapshot(partial)
+            return
+        }
         if (current.botPercent == meter.percent && current.botResetRaw == meter.resetRaw) return
         val updated = current.copy(
             botPercent = meter.percent,
             botResetRaw = meter.resetRaw,
-            updatedAtEpochMs = System.currentTimeMillis(),
+            updatedAtEpochMs = now,
         )
         snapshot = updated
         store.save(updated)
         status = StatusKind.Updated
+        publishSnapshot(updated)
+    }
+
+    private fun publishSnapshot(updated: UsageSnapshot) {
         val app = getApplication<Application>()
         UsageWidgets.refresh(app, updated.overallPercent, updated.botPercent)
         if (store.loadNotify() && UsageNotifier.canPost(app)) {
@@ -360,6 +441,10 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
         sessionKnown = false
         accountLabel = null
         accountPageLeft = false
+        providerHold = false
+        providerSince = 0L
+        signInPaused = false
+        leftDuringSignIn = false
         pendingBot = null
         snapshot = null
         store.clearSignInStarted()
@@ -367,7 +452,7 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
         UsageRefresh.cancel(getApplication())
         refreshing = false
         status = StatusKind.Empty
-        webTarget = GrokLinks.DASHBOARD
+        webTarget = GrokLinks.USAGE
         loadToken++
         phase = Phase.SignedOut
     }
@@ -401,5 +486,4 @@ class UsageViewModel(app: Application) : AndroidViewModel(app) {
     fun requestScrollTop() {
         scrollTopTick++
     }
-
 }
